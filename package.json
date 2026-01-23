@@ -1,0 +1,116 @@
+{
+  "name": "local-risk-alert-feed",
+  "version": "0.1.0",
+  "description": "TypeScript library for aggregating local risk alerts from multiple data sources via a plugin system",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    },
+    "./adapters/lambda": {
+      "import": "./dist/esm/adapters/lambda.js",
+      "require": "./dist/cjs/adapters/lambda.js",
+      "types": "./dist/types/adapters/lambda.d.ts"
+    },
+    "./adapters/vercel": {
+      "import": "./dist/esm/adapters/vercel.js",
+      "require": "./dist/cjs/adapters/vercel.js",
+      "types": "./dist/types/adapters/vercel.d.ts"
+    },
+    "./plugins/police-blotter": {
+      "import": "./dist/esm/plugins/police-blotter/index.js",
+      "require": "./dist/cjs/plugins/police-blotter/index.js",
+      "types": "./dist/types/plugins/police-blotter/index.d.ts"
+    },
+    "./plugins/fire-emt": {
+      "import": "./dist/esm/plugins/fire-emt/index.js",
+      "require": "./dist/cjs/plugins/fire-emt/index.js",
+      "types": "./dist/types/plugins/fire-emt/index.d.ts"
+    },
+    "./plugins/events": {
+      "import": "./dist/esm/plugins/events/index.js",
+      "require": "./dist/cjs/plugins/events/index.js",
+      "types": "./dist/types/plugins/events/index.d.ts"
+    },
+    "./plugins/weather": {
+      "import": "./dist/esm/plugins/weather/index.js",
+      "require": "./dist/cjs/plugins/weather/index.js",
+      "types": "./dist/types/plugins/weather/index.d.ts"
+    },
+    "./plugins/pulsepoint": {
+      "import": "./dist/esm/plugins/pulsepoint/index.js",
+      "require": "./dist/cjs/plugins/pulsepoint/index.js",
+      "types": "./dist/types/plugins/pulsepoint/index.d.ts"
+    },
+    "./plugins/traffic": {
+      "import": "./dist/esm/plugins/traffic/index.js",
+      "require": "./dist/cjs/plugins/traffic/index.js",
+      "types": "./dist/types/plugins/traffic/index.d.ts"
+    },
+    "./plugins/air-quality": {
+      "import": "./dist/esm/plugins/air-quality/index.js",
+      "require": "./dist/cjs/plugins/air-quality/index.js",
+      "types": "./dist/types/plugins/air-quality/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && npm run build:types",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:types": "tsc -p tsconfig.types.json",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "alerts",
+    "risk",
+    "local",
+    "gps",
+    "weather",
+    "crime",
+    "events",
+    "plugin"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@vercel/kv": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-dynamodb": {
+      "optional": true
+    },
+    "@aws-sdk/lib-dynamodb": {
+      "optional": true
+    },
+    "@vercel/kv": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.131",
+    "@types/node": "^20.19.30",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^1.0.0"
+  }
+}
