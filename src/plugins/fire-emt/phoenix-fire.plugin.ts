@@ -2,33 +2,47 @@ import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel, 
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
 
 /**
- * Phoenix Fire incident response from Socrata API.
+ * Phoenix Fire incident from ArcGIS service.
  */
 interface PhoenixFireIncident {
-  incident_number: string;
-  call_type?: string;
-  call_type_final?: string;
-  address?: string;
-  city?: string;
-  zip?: string;
-  incident_date?: string;
-  dispatch_time?: string;
-  arrival_time?: string;
-  clear_time?: string;
-  latitude?: string;
-  longitude?: string;
-  priority?: string;
-  station?: string;
-  battalion?: string;
+  OBJECTID: number;
+  INCIDENT: string;
+  CITY: string;
+  FIRE_DISTRICT: string;
+  COUNCIL_DISTRICT: string;
+  STATION: string;
+  CATEGORY: string; // ALS, BLS, FIRE, etc.
+  CLASSIFICATION: string;
+  REPORTED: number; // Unix timestamp in ms
+  VILLAGE: string;
+  FIRST_DUE: string;
+  TYPE: string; // EMS, FIRE, SERVICE
+}
+
+/**
+ * ArcGIS GeoJSON response.
+ */
+interface ArcGISGeoJSONResponse {
+  type: 'FeatureCollection';
+  features: Array<{
+    type: 'Feature';
+    properties: PhoenixFireIncident;
+    geometry: {
+      type: 'Point';
+      coordinates: [number, number]; // [lng, lat]
+    };
+  }>;
 }
 
 /**
  * Phoenix Fire plugin configuration.
  */
 export interface PhoenixFirePluginConfig extends BasePluginConfig {
-  /** Socrata app token for higher rate limits (optional) */
-  appToken?: string;
-  /** Maximum records to fetch per request. Default: 1000 */
+  /** Include EMS calls. Default: true */
+  includeEMS?: boolean;
+  /** Include service calls (non-emergency). Default: false */
+  includeService?: boolean;
+  /** Maximum records to fetch per request. Default: 500 */
   limit?: number;
 }
 
@@ -46,80 +60,47 @@ const PHOENIX_CENTER = {
 const COVERAGE_RADIUS_METERS = 50_000;
 
 /**
- * Call type to category and risk mappings.
+ * Category to risk level and alert category mapping.
  */
-const CALL_TYPE_MAP: Record<string, { category: AlertCategory; risk: RiskLevel }> = {
-  // Fire-related
-  STRUCTURE_FIRE: { category: 'fire', risk: 'extreme' },
+const CATEGORY_MAP: Record<string, { category: AlertCategory; risk: RiskLevel }> = {
+  // Fire categories
+  FIRE: { category: 'fire', risk: 'high' },
   'STRUCTURE FIRE': { category: 'fire', risk: 'extreme' },
-  FIRE: { category: 'fire', risk: 'severe' },
-  BRUSH_FIRE: { category: 'fire', risk: 'severe' },
   'BRUSH FIRE': { category: 'fire', risk: 'severe' },
-  VEHICLE_FIRE: { category: 'fire', risk: 'high' },
-  'VEHICLE FIRE': { category: 'fire', risk: 'high' },
-  DUMPSTER_FIRE: { category: 'fire', risk: 'moderate' },
-  'DUMPSTER FIRE': { category: 'fire', risk: 'moderate' },
-  SMOKE_INVESTIGATION: { category: 'fire', risk: 'moderate' },
-  'SMOKE INVESTIGATION': { category: 'fire', risk: 'moderate' },
-  ALARM: { category: 'fire', risk: 'low' },
-  'FIRE ALARM': { category: 'fire', risk: 'low' },
-
-  // Medical-related
-  CARDIAC: { category: 'medical', risk: 'severe' },
-  'CARDIAC ARREST': { category: 'medical', risk: 'severe' },
-  STROKE: { category: 'medical', risk: 'severe' },
-  TRAUMA: { category: 'medical', risk: 'severe' },
-  'MAJOR TRAUMA': { category: 'medical', risk: 'severe' },
-  MEDICAL: { category: 'medical', risk: 'high' },
-  'MEDICAL AID': { category: 'medical', risk: 'high' },
-  'MEDICAL EMERGENCY': { category: 'medical', risk: 'high' },
-  OVERDOSE: { category: 'medical', risk: 'high' },
-  'DRUG OVERDOSE': { category: 'medical', risk: 'high' },
-  BREATHING: { category: 'medical', risk: 'high' },
-  'BREATHING PROBLEMS': { category: 'medical', risk: 'high' },
-  UNCONSCIOUS: { category: 'medical', risk: 'high' },
-  'UNCONSCIOUS PERSON': { category: 'medical', risk: 'high' },
-  FALL: { category: 'medical', risk: 'moderate' },
-  SICK: { category: 'medical', risk: 'moderate' },
-  'SICK PERSON': { category: 'medical', risk: 'moderate' },
-  TRANSFER: { category: 'medical', risk: 'low' },
-  'PATIENT TRANSFER': { category: 'medical', risk: 'low' },
-
-  // Traffic/accident-related (categorize as medical for injuries)
-  ACCIDENT: { category: 'medical', risk: 'high' },
-  'TRAFFIC ACCIDENT': { category: 'medical', risk: 'high' },
-  'MOTOR VEHICLE ACCIDENT': { category: 'medical', risk: 'high' },
-  MVA: { category: 'medical', risk: 'high' },
-  EXTRICATION: { category: 'medical', risk: 'severe' },
-  'VEHICLE EXTRICATION': { category: 'medical', risk: 'severe' },
-
-  // Hazmat
   HAZMAT: { category: 'fire', risk: 'severe' },
-  'HAZARDOUS MATERIALS': { category: 'fire', risk: 'severe' },
-  'GAS LEAK': { category: 'fire', risk: 'high' },
-  'CARBON MONOXIDE': { category: 'fire', risk: 'high' },
+
+  // EMS categories
+  ALS: { category: 'medical', risk: 'high' }, // Advanced Life Support
+  BLS: { category: 'medical', risk: 'moderate' }, // Basic Life Support
+  CEMS: { category: 'medical', risk: 'moderate' }, // Community EMS
+
+  // Service categories
+  'MISC SERVICE': { category: 'fire', risk: 'low' },
+  SERVICE: { category: 'fire', risk: 'low' },
 };
 
 /**
- * Plugin that fetches fire and EMS incident data from Phoenix Open Data Portal.
+ * Plugin that fetches fire and EMS incident data from Phoenix Fire Department ArcGIS service.
  *
- * @see https://www.phoenixopendata.com/dataset/fire-incidents
+ * Uses the Phoenix Fire 30-day incident history which is updated frequently (data is ~1-2 days old).
+ *
+ * @see https://maps.phoenix.gov/phxfire/rest/services/IncidentHistory30DayPoints/MapServer
  */
 export class PhoenixFirePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'phoenix-fire',
     name: 'Phoenix Fire Department',
-    version: '1.0.0',
-    description: 'Fire and EMS incidents from Phoenix Fire Department',
+    version: '2.0.0',
+    description: 'Fire and EMS incidents from Phoenix Regional Dispatch Center',
     coverage: {
       type: 'regional',
       center: PHOENIX_CENTER,
       radiusMeters: COVERAGE_RADIUS_METERS,
-      description: 'Phoenix, AZ metropolitan area',
+      description: 'Phoenix, AZ metropolitan area (Phoenix, Paradise Valley, Laveen)',
     },
     supportedTemporalTypes: ['historical', 'real-time'],
     supportedCategories: ['fire', 'medical'],
-    refreshIntervalMs: 15 * 60 * 1000, // 15 minutes
+    refreshIntervalMs: 5 * 60 * 1000, // 5 minutes
   };
 
   private fireConfig: PhoenixFirePluginConfig;
@@ -127,109 +108,134 @@ export class PhoenixFirePlugin extends BasePlugin {
   constructor(config?: PhoenixFirePluginConfig) {
     super(config);
     this.fireConfig = {
-      limit: 1000,
+      includeEMS: true,
+      includeService: false,
+      limit: 500,
       ...config,
     };
   }
 
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
+    const { location, timeRange, radiusMeters, categories } = options;
     const cacheKey = this.generateCacheKey(options);
+    const warnings: string[] = [];
 
-    // NOTE: Phoenix Open Data no longer provides a Socrata API for fire/EMS data.
-    // The data is only available as yearly CSV downloads, which is not suitable for real-time querying.
-    // This plugin is kept for backwards compatibility but returns empty results.
-    // See: https://www.phoenixopendata.com/dataset/calls-for-service-fire
-    const warnings = [
-      'Phoenix Fire data source unavailable: Phoenix Open Data has discontinued the Socrata API. ' +
-      'Fire/EMS calls for service data is now only available as yearly CSV downloads, which cannot be queried in real-time.'
-    ];
+    try {
+      const { data, fromCache } = await this.getCachedOrFetch(
+        cacheKey,
+        () => this.fetchIncidents(location, timeRange, radiusMeters, categories),
+        this.config.cacheTtlMs
+      );
 
-    return {
-      alerts: [],
-      fromCache: false,
-      cacheKey,
-      warnings,
-    };
+      return {
+        alerts: data,
+        fromCache,
+        cacheKey,
+        warnings: warnings.length > 0 ? warnings : undefined,
+      };
+    } catch (error) {
+      console.error('Phoenix Fire fetch error:', error);
+      throw error;
+    }
   }
 
   /**
-   * Build the Socrata API URL for Phoenix fire data.
+   * Fetch incidents from Phoenix Fire ArcGIS service.
    */
-  private buildApiUrl(
+  private async fetchIncidents(
     location: { latitude: number; longitude: number },
     timeRange: { start: string; end: string },
     radiusMeters: number,
-    limit?: number
-  ): string {
-    // Phoenix Fire incidents dataset
-    const baseUrl = 'https://www.phoenixopendata.com/resource/m3af-pnrm.json';
+    categories?: AlertCategory[]
+  ) {
+    // Phoenix Fire 30-day incident history
+    const baseUrl = 'https://maps.phoenix.gov/phxfire/rest/services/IncidentHistory30DayPoints/MapServer/0/query';
 
-    const params = new URLSearchParams();
+    // Build where clause for time range using DATE format (required by this ArcGIS server)
+    const startDate = new Date(timeRange.start).toISOString().split('T')[0];
+    const endDate = new Date(timeRange.end).toISOString().split('T')[0];
 
-    // Limit results
-    params.set('$limit', String(limit ?? this.fireConfig.limit));
-
-    // Order by most recent
-    params.set('$order', 'incident_date DESC');
-
-    // Build WHERE clause
-    const whereClauses: string[] = [];
-
-    // Time filter
-    const startDate = timeRange.start.split('T')[0];
-    const endDate = timeRange.end.split('T')[0];
-    whereClauses.push(`incident_date >= '${startDate}'`);
-    whereClauses.push(`incident_date <= '${endDate}'`);
-
-    // Location filter using within_circle
-    whereClauses.push(
-      `within_circle(geocoded_column, ${location.latitude}, ${location.longitude}, ${radiusMeters})`
-    );
-
-    params.set('$where', whereClauses.join(' AND '));
-
-    // Add app token if provided
-    if (this.fireConfig.appToken) {
-      params.set('$$app_token', this.fireConfig.appToken);
+    // Build type filter
+    const typeFilters: string[] = ["TYPE='FIRE'"];
+    if (this.fireConfig.includeEMS) {
+      typeFilters.push("TYPE='EMS'");
+    }
+    if (this.fireConfig.includeService) {
+      typeFilters.push("TYPE='SERVICE'");
     }
 
-    return `${baseUrl}?${params.toString()}`;
+    const params = new URLSearchParams({
+      where: `REPORTED >= DATE '${startDate}' AND REPORTED <= DATE '${endDate}' AND (${typeFilters.join(' OR ')})`,
+      outFields: '*',
+      f: 'geojson',
+      outSR: '4326',
+      resultRecordCount: String(this.fireConfig.limit),
+      orderByFields: 'REPORTED DESC',
+    });
+
+    const url = `${baseUrl}?${params}`;
+    const response = await this.fetchJson<ArcGISGeoJSONResponse>(url);
+
+    if (!response.features) {
+      return [];
+    }
+
+    // Transform and filter by location
+    const alerts = response.features
+      .filter(f => {
+        if (!f.geometry?.coordinates) return false;
+
+        const [lng, lat] = f.geometry.coordinates;
+        const distance = this.calculateDistance(location.latitude, location.longitude, lat, lng);
+
+        if (distance > radiusMeters) return false;
+
+        // Filter by categories if specified
+        if (categories && categories.length > 0) {
+          const alertCategory = this.mapTypeToCategory(f.properties.TYPE, f.properties.CATEGORY);
+          if (!categories.includes(alertCategory)) return false;
+        }
+
+        return true;
+      })
+      .map(f => this.transformIncident(f.properties, f.geometry.coordinates));
+
+    return alerts;
   }
 
   /**
-   * Fetch incidents from the API.
+   * Map incident type and category to alert category.
    */
-  private async fetchIncidents(url: string): Promise<PhoenixFireIncident[]> {
-    return this.fetchJson<PhoenixFireIncident[]>(url);
+  private mapTypeToCategory(type: string, category: string): AlertCategory {
+    if (type === 'FIRE') return 'fire';
+    if (type === 'EMS') return 'medical';
+    return 'fire';
   }
 
   /**
    * Transform a Phoenix Fire incident to our Alert format.
    */
-  private transformIncident(incident: PhoenixFireIncident) {
-    const callType = (incident.call_type_final ?? incident.call_type ?? 'UNKNOWN').toUpperCase();
-    const { category, risk } = this.mapCallType(callType);
+  private transformIncident(
+    incident: PhoenixFireIncident,
+    coordinates: [number, number]
+  ) {
+    const [longitude, latitude] = coordinates;
+    const { category, risk } = this.mapCategoryToRisk(incident.TYPE, incident.CATEGORY);
 
-    // Parse coordinates
-    const latitude = incident.latitude ? parseFloat(incident.latitude) : PHOENIX_CENTER.latitude;
-    const longitude = incident.longitude
-      ? parseFloat(incident.longitude)
-      : PHOENIX_CENTER.longitude;
+    // Parse timestamp
+    const issued = new Date(incident.REPORTED).toISOString();
 
-    // Build timestamp from incident_date and dispatch_time
-    const incidentDate = incident.incident_date ?? new Date().toISOString().split('T')[0];
-    const dispatchTime = incident.dispatch_time ?? '00:00:00';
-    const issued = `${incidentDate}T${dispatchTime}`;
+    // Determine if real-time (within last 24 hours)
+    const isRecent = Date.now() - incident.REPORTED < 24 * 60 * 60 * 1000;
+    const temporalType = isRecent ? 'real-time' : 'historical';
 
-    // Determine if this is real-time (within last hour) or historical
-    const issuedTime = new Date(issued).getTime();
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    const temporalType = issuedTime > oneHourAgo ? 'real-time' : 'historical';
+    // Build title
+    const title = this.buildTitle(incident.TYPE, incident.CATEGORY);
 
     return this.createAlert({
-      id: `phoenix-fire-${incident.incident_number}`,
-      externalId: incident.incident_number,
-      title: this.formatCallType(callType),
+      id: `phoenix-fire-${incident.INCIDENT}`,
+      externalId: incident.INCIDENT,
+      title,
       description: this.buildDescription(incident),
       riskLevel: risk,
       priority: this.riskLevelToPriority(risk),
@@ -237,71 +243,69 @@ export class PhoenixFirePlugin extends BasePlugin {
       temporalType,
       location: {
         point: { latitude, longitude },
-        address: incident.address,
-        city: incident.city ?? 'Phoenix',
+        city: incident.CITY === 'PHX' ? 'Phoenix' : incident.CITY,
         state: 'AZ',
-        zipCode: incident.zip,
       },
       timestamps: {
         issued,
         eventStart: issued,
-        eventEnd: incident.clear_time ? `${incidentDate}T${incident.clear_time}` : undefined,
       },
       metadata: {
-        incidentNumber: incident.incident_number,
-        callType,
-        priority: incident.priority,
-        station: incident.station,
-        battalion: incident.battalion,
-        arrivalTime: incident.arrival_time,
-        clearTime: incident.clear_time,
+        incidentNumber: incident.INCIDENT,
+        type: incident.TYPE,
+        category: incident.CATEGORY,
+        classification: incident.CLASSIFICATION,
+        station: incident.STATION?.trim(),
+        fireDistrict: incident.FIRE_DISTRICT,
+        councilDistrict: incident.COUNCIL_DISTRICT,
+        village: incident.VILLAGE,
       },
     });
   }
 
   /**
-   * Map a call type to category and risk level.
+   * Map category to risk level.
    */
-  private mapCallType(callType: string): { category: AlertCategory; risk: RiskLevel } {
-    // Try exact match first
-    if (CALL_TYPE_MAP[callType]) {
-      return CALL_TYPE_MAP[callType];
+  private mapCategoryToRisk(type: string, category: string): { category: AlertCategory; risk: RiskLevel } {
+    // Check specific category mapping
+    const upperCategory = category?.toUpperCase() ?? '';
+    if (CATEGORY_MAP[upperCategory]) {
+      return CATEGORY_MAP[upperCategory];
     }
 
-    // Try partial match
-    for (const [key, value] of Object.entries(CALL_TYPE_MAP)) {
-      if (callType.includes(key) || key.includes(callType)) {
-        return value;
-      }
-    }
-
-    // Default based on common keywords
-    if (callType.includes('FIRE') || callType.includes('SMOKE') || callType.includes('BURN')) {
+    // Default by type
+    if (type === 'FIRE') {
       return { category: 'fire', risk: 'high' };
     }
-
-    if (
-      callType.includes('MEDICAL') ||
-      callType.includes('EMS') ||
-      callType.includes('AMBULANCE')
-    ) {
+    if (type === 'EMS') {
+      // ALS is higher priority than BLS
+      if (category === 'ALS') {
+        return { category: 'medical', risk: 'high' };
+      }
       return { category: 'medical', risk: 'moderate' };
     }
 
-    // Default
-    return { category: 'fire', risk: 'moderate' };
+    return { category: 'fire', risk: 'low' };
   }
 
   /**
-   * Format call type for display.
+   * Build incident title.
    */
-  private formatCallType(callType: string): string {
-    return callType
-      .toLowerCase()
-      .replace(/_/g, ' ')
-      .split(' ')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+  private buildTitle(type: string, category: string): string {
+    const categoryLabels: Record<string, string> = {
+      ALS: 'Medical Emergency (ALS)',
+      BLS: 'Medical Call (BLS)',
+      CEMS: 'Community EMS',
+      FIRE: 'Fire Incident',
+      'MISC SERVICE': 'Service Call',
+      SERVICE: 'Service Call',
+    };
+
+    if (type === 'FIRE') {
+      return category === 'FIRE' ? 'Fire Incident' : `Fire: ${category}`;
+    }
+
+    return categoryLabels[category] ?? `${type}: ${category}`;
   }
 
   /**
@@ -310,23 +314,39 @@ export class PhoenixFirePlugin extends BasePlugin {
   private buildDescription(incident: PhoenixFireIncident): string {
     const parts: string[] = [];
 
-    const callType = incident.call_type_final ?? incident.call_type;
-    if (callType) {
-      parts.push(`Type: ${this.formatCallType(callType)}`);
+    parts.push(`Type: ${incident.TYPE}`);
+    parts.push(`Category: ${incident.CATEGORY}`);
+
+    if (incident.CLASSIFICATION) {
+      parts.push(`Classification: ${incident.CLASSIFICATION}`);
     }
 
-    if (incident.address) {
-      parts.push(`Location: ${incident.address}`);
+    if (incident.VILLAGE) {
+      parts.push(`Area: ${incident.VILLAGE}`);
     }
 
-    if (incident.priority) {
-      parts.push(`Priority: ${incident.priority}`);
-    }
-
-    if (incident.station) {
-      parts.push(`Station: ${incident.station}`);
+    if (incident.STATION?.trim()) {
+      parts.push(`Station: ${incident.STATION.trim()}`);
     }
 
     return parts.join('\n');
+  }
+
+  /**
+   * Calculate distance between two points in meters.
+   */
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371e3;
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
   }
 }
