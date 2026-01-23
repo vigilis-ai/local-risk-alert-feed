@@ -6,17 +6,9 @@ export type { BasePluginConfig } from './base-plugin';
 export { NWSWeatherPlugin } from './weather';
 export type { NWSWeatherPluginConfig } from './weather';
 
-// Police/crime plugins
-export { PhoenixPolicePlugin } from './police-blotter';
-export type { PhoenixPolicePluginConfig } from './police-blotter';
-
 // Fire/EMS plugins
-export { PhoenixFirePlugin } from './fire-emt';
-export type { PhoenixFirePluginConfig } from './fire-emt';
-
-// Real-time fire/EMS plugins
-export { PulsepointPlugin } from './pulsepoint';
-export type { PulsepointPluginConfig } from './pulsepoint';
+export { PhoenixFirePlugin, NIFCWildfirePlugin } from './fire-emt';
+export type { PhoenixFirePluginConfig, NIFCWildfirePluginConfig } from './fire-emt';
 
 // Events plugins
 export { PhoenixEventsPlugin } from './events';

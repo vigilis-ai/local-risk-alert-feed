@@ -112,14 +112,8 @@ export type { BasePluginConfig } from './plugins';
 export { NWSWeatherPlugin } from './plugins/weather';
 export type { NWSWeatherPluginConfig } from './plugins/weather';
 
-export { PhoenixPolicePlugin } from './plugins/police-blotter';
-export type { PhoenixPolicePluginConfig } from './plugins/police-blotter';
-
-export { PhoenixFirePlugin } from './plugins/fire-emt';
-export type { PhoenixFirePluginConfig } from './plugins/fire-emt';
-
-export { PulsepointPlugin } from './plugins/pulsepoint';
-export type { PulsepointPluginConfig } from './plugins/pulsepoint';
+export { PhoenixFirePlugin, NIFCWildfirePlugin } from './plugins/fire-emt';
+export type { PhoenixFirePluginConfig, NIFCWildfirePluginConfig } from './plugins/fire-emt';
 
 export { PhoenixEventsPlugin } from './plugins/events';
 export type { PhoenixEventsPluginConfig } from './plugins/events';
