@@ -1,8 +1,7 @@
 /**
  * Test script for the Local Risk Alert Feed library.
  *
- * Run with: npx ts-node scripts/test-query.ts
- * Or after build: node dist/esm/scripts/test-query.js
+ * Run with: npx tsx scripts/test-query.ts
  */
 
 import { AlertFeed } from '../src';
@@ -10,6 +9,10 @@ import { NWSWeatherPlugin } from '../src/plugins/weather';
 import { PhoenixPolicePlugin } from '../src/plugins/police-blotter';
 import { PhoenixFirePlugin } from '../src/plugins/fire-emt';
 import { PhoenixEventsPlugin } from '../src/plugins/events';
+import { PulsepointPlugin } from '../src/plugins/pulsepoint';
+import { ArizonaTrafficPlugin } from '../src/plugins/traffic';
+// Note: AirNowPlugin requires an API key, so it's optional
+// import { AirNowPlugin } from '../src/plugins/air-quality';
 
 // Phoenix, AZ coordinates
 const PHOENIX_LOCATION = {
@@ -42,19 +45,25 @@ async function main() {
     { plugin: new PhoenixPolicePlugin() },
     { plugin: new PhoenixFirePlugin() },
     { plugin: new PhoenixEventsPlugin({ enableTicketmaster: false }) }, // No API key
+    { plugin: new PulsepointPlugin() },
+    { plugin: new ArizonaTrafficPlugin() },
+    // Uncomment if you have an AirNow API key:
+    // { plugin: new AirNowPlugin({ apiKey: process.env.AIRNOW_API_KEY! }) },
   ]);
 
   // Show registered plugins
   const plugins = feed.getPluginMetadata();
   console.log(`Registered ${plugins.length} plugins:`);
   for (const p of plugins) {
-    console.log(`  - ${p.name} (${p.id}): ${p.coverage.description}`);
+    console.log(`  - ${p.name} (${p.id})`);
+    console.log(`    Categories: ${p.supportedCategories.join(', ')}`);
+    console.log(`    Coverage: ${p.coverage.description || p.coverage.type}`);
   }
   console.log();
 
-  // Test 1: Query Phoenix location
+  // Test 1: Query Phoenix location - All categories
   console.log('-'.repeat(60));
-  console.log('Test 1: Query Phoenix, AZ');
+  console.log('Test 1: Query Phoenix, AZ - All Categories');
   console.log(`Location: ${PHOENIX_LOCATION.latitude}, ${PHOENIX_LOCATION.longitude}`);
   console.log('-'.repeat(60));
 
@@ -62,7 +71,8 @@ async function main() {
     const phoenixResponse = await feed.query({
       location: PHOENIX_LOCATION,
       timeRange: 'past-7d',
-      limit: 10,
+      radiusMeters: 10000,
+      limit: 20,
       includePluginResults: true,
     });
 
@@ -90,9 +100,10 @@ async function main() {
 
     if (phoenixResponse.alerts.length > 0) {
       console.log('\nSample Alerts:');
-      for (const alert of phoenixResponse.alerts.slice(0, 5)) {
+      for (const alert of phoenixResponse.alerts.slice(0, 10)) {
         console.log(`\n  [${alert.riskLevel.toUpperCase()}] ${alert.title}`);
         console.log(`    Category: ${alert.category}`);
+        console.log(`    Type: ${alert.temporalType}`);
         console.log(`    Source: ${alert.source.name}`);
         console.log(`    Location: ${alert.location.address || `${alert.location.point.latitude}, ${alert.location.point.longitude}`}`);
         console.log(`    Time: ${alert.timestamps.eventStart || alert.timestamps.issued}`);
@@ -100,6 +111,17 @@ async function main() {
     } else {
       console.log('\nNo alerts found.');
     }
+
+    // Summary by category
+    console.log('\nAlerts by Category:');
+    const byCategory = phoenixResponse.alerts.reduce((acc, a) => {
+      acc[a.category] = (acc[a.category] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    for (const [cat, count] of Object.entries(byCategory)) {
+      console.log(`  ${cat}: ${count}`);
+    }
+
   } catch (error) {
     console.error('Error querying Phoenix:', error);
   }
@@ -130,7 +152,7 @@ async function main() {
     }
 
     if (nycResponse.alerts.length > 0) {
-      console.log('\nAlerts (should only be weather):');
+      console.log('\nAlerts (should only be weather since Phoenix plugins dont cover NYC):');
       for (const alert of nycResponse.alerts) {
         console.log(`  - [${alert.category}] ${alert.title}`);
       }
@@ -141,29 +163,71 @@ async function main() {
     console.error('Error querying NYC:', error);
   }
 
-  // Test 3: Filter by category
+  // Test 3: Query Phoenix - Real-time only
   console.log('\n');
   console.log('-'.repeat(60));
-  console.log('Test 3: Query Phoenix - Weather Only');
+  console.log('Test 3: Query Phoenix - Real-Time Alerts Only');
   console.log('-'.repeat(60));
 
   try {
-    const weatherResponse = await feed.query({
+    const realtimeResponse = await feed.query({
       location: PHOENIX_LOCATION,
-      timeRange: 'next-24h',
-      categories: ['weather'],
-      limit: 5,
+      timeRange: 'past-24h',
+      temporalTypes: ['real-time'],
+      limit: 10,
+      includePluginResults: true,
     });
 
-    console.log(`\nWeather alerts: ${weatherResponse.meta.totalCount}`);
+    console.log(`\nReal-time alerts: ${realtimeResponse.meta.totalCount}`);
 
-    for (const alert of weatherResponse.alerts) {
-      console.log(`  - ${alert.title}`);
-      console.log(`    Risk: ${alert.riskLevel}, Expires: ${alert.timestamps.expires || 'N/A'}`);
+    if (realtimeResponse.pluginResults) {
+      console.log('\nPlugin Results:');
+      for (const result of realtimeResponse.pluginResults) {
+        if (result.alertCount > 0) {
+          console.log(`  ✓ ${result.pluginName}: ${result.alertCount} real-time alerts`);
+        }
+      }
     }
 
-    if (weatherResponse.alerts.length === 0) {
-      console.log('  No active weather alerts for Phoenix.');
+    for (const alert of realtimeResponse.alerts.slice(0, 5)) {
+      console.log(`\n  [${alert.riskLevel.toUpperCase()}] ${alert.title}`);
+      console.log(`    Source: ${alert.source.name}`);
+      console.log(`    Category: ${alert.category}`);
+    }
+
+    if (realtimeResponse.alerts.length === 0) {
+      console.log('  No active real-time alerts.');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+  }
+
+  // Test 4: Query Phoenix - Traffic only
+  console.log('\n');
+  console.log('-'.repeat(60));
+  console.log('Test 4: Query Phoenix - Traffic Incidents');
+  console.log('-'.repeat(60));
+
+  try {
+    const trafficResponse = await feed.query({
+      location: PHOENIX_LOCATION,
+      radiusMeters: 50000, // 50km for traffic
+      timeRange: 'past-24h',
+      categories: ['traffic'],
+      limit: 10,
+    });
+
+    console.log(`\nTraffic alerts: ${trafficResponse.meta.totalCount}`);
+
+    for (const alert of trafficResponse.alerts) {
+      console.log(`  - [${alert.riskLevel}] ${alert.title}`);
+      if (alert.location.address) {
+        console.log(`    Location: ${alert.location.address}`);
+      }
+    }
+
+    if (trafficResponse.alerts.length === 0) {
+      console.log('  No traffic incidents found.');
     }
   } catch (error) {
     console.error('Error:', error);
