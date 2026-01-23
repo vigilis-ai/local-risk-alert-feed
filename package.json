@@ -83,7 +83,6 @@
   ],
   "author": "",
   "license": "UNLICENSED",
-  "private": true,
   "engines": {
     "node": ">=18.0.0"
   },
