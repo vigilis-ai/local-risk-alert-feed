@@ -157,44 +157,23 @@ export class PulsepointPlugin extends BasePlugin {
   }
 
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
-    const { location, radiusMeters, categories } = options;
     const cacheKey = this.generateCacheKey(options);
-    const warnings: string[] = [];
 
-    try {
-      const { data, fromCache } = await this.getCachedOrFetch(
-        cacheKey,
-        () => this.fetchAllAgencies(warnings),
-        // Short cache TTL for real-time data
-        30 * 1000 // 30 seconds
-      );
+    // NOTE: Pulsepoint has changed their web interface to a React SPA.
+    // The old JSON API endpoint (web.pulsepoint.org/DB/giba.php) no longer returns JSON data.
+    // This plugin is kept for backwards compatibility but returns empty results.
+    // See: https://web.pulsepoint.org
+    const warnings = [
+      'Pulsepoint data source unavailable: Pulsepoint has updated their web interface and the ' +
+      'public JSON API is no longer accessible. Real-time fire/EMS incident data cannot be retrieved.'
+    ];
 
-      // Filter by location radius
-      let alerts = data.filter((alert) => {
-        const distance = this.calculateDistance(
-          location.latitude,
-          location.longitude,
-          alert.location.point.latitude,
-          alert.location.point.longitude
-        );
-        return distance <= radiusMeters;
-      });
-
-      // Filter by categories if specified
-      if (categories && categories.length > 0) {
-        alerts = alerts.filter((alert) => categories.includes(alert.category));
-      }
-
-      return {
-        alerts,
-        fromCache,
-        cacheKey,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      };
-    } catch (error) {
-      console.error('Pulsepoint fetch error:', error);
-      throw error;
-    }
+    return {
+      alerts: [],
+      fromCache: false,
+      cacheKey,
+      warnings,
+    };
   }
 
   /**

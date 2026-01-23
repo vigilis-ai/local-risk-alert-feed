@@ -133,35 +133,23 @@ export class PhoenixFirePlugin extends BasePlugin {
   }
 
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
-    const { location, timeRange, radiusMeters, limit, categories } = options;
     const cacheKey = this.generateCacheKey(options);
 
-    // Build Socrata API URL
-    const url = this.buildApiUrl(location, timeRange, radiusMeters, limit);
+    // NOTE: Phoenix Open Data no longer provides a Socrata API for fire/EMS data.
+    // The data is only available as yearly CSV downloads, which is not suitable for real-time querying.
+    // This plugin is kept for backwards compatibility but returns empty results.
+    // See: https://www.phoenixopendata.com/dataset/calls-for-service-fire
+    const warnings = [
+      'Phoenix Fire data source unavailable: Phoenix Open Data has discontinued the Socrata API. ' +
+      'Fire/EMS calls for service data is now only available as yearly CSV downloads, which cannot be queried in real-time.'
+    ];
 
-    try {
-      const { data, fromCache } = await this.getCachedOrFetch(
-        cacheKey,
-        () => this.fetchIncidents(url),
-        this.config.cacheTtlMs
-      );
-
-      let alerts = data.map((incident) => this.transformIncident(incident));
-
-      // Filter by categories if specified
-      if (categories && categories.length > 0) {
-        alerts = alerts.filter((alert) => categories.includes(alert.category));
-      }
-
-      return {
-        alerts,
-        fromCache,
-        cacheKey,
-      };
-    } catch (error) {
-      console.error('Phoenix Fire fetch error:', error);
-      throw error;
-    }
+    return {
+      alerts: [],
+      fromCache: false,
+      cacheKey,
+      warnings,
+    };
   }
 
   /**

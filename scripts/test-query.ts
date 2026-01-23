@@ -8,7 +8,7 @@ import { AlertFeed } from '../src';
 import { NWSWeatherPlugin } from '../src/plugins/weather';
 import { PhoenixPolicePlugin } from '../src/plugins/police-blotter';
 import { PhoenixFirePlugin } from '../src/plugins/fire-emt';
-import { PhoenixEventsPlugin } from '../src/plugins/events';
+import { PhoenixEventsPlugin, PhoenixConventionCenterPlugin } from '../src/plugins/events';
 import { PulsepointPlugin } from '../src/plugins/pulsepoint';
 import { ArizonaTrafficPlugin } from '../src/plugins/traffic';
 // Note: AirNowPlugin requires an API key, so it's optional
@@ -40,11 +40,19 @@ async function main() {
 
   // Register plugins
   console.log('Registering plugins...');
+
+  // Check for optional API keys from environment
+  const ticketmasterApiKey = process.env.TICKETMASTER_API_KEY;
+
   await feed.registerPlugins([
     { plugin: new NWSWeatherPlugin() },
     { plugin: new PhoenixPolicePlugin() },
     { plugin: new PhoenixFirePlugin() },
-    { plugin: new PhoenixEventsPlugin({ enableTicketmaster: false }) }, // No API key
+    { plugin: new PhoenixEventsPlugin({
+      ticketmasterApiKey,
+      enableTicketmaster: !!ticketmasterApiKey,
+    }) },
+    { plugin: new PhoenixConventionCenterPlugin() },
     { plugin: new PulsepointPlugin() },
     { plugin: new ArizonaTrafficPlugin() },
     // Uncomment if you have an AirNow API key:

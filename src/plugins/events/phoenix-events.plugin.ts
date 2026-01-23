@@ -236,13 +236,18 @@ export class PhoenixEventsPlugin extends BasePlugin {
     const { location, timeRange } = options;
     const apiKey = this.eventsConfig.ticketmasterApiKey!;
 
+    // Ticketmaster requires format: YYYY-MM-DDTHH:mm:ssZ (no milliseconds)
+    const formatDateTime = (iso: string) => {
+      return new Date(iso).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    };
+
     const params = new URLSearchParams({
       apikey: apiKey,
       latlong: `${location.latitude},${location.longitude}`,
       radius: '25', // miles
       unit: 'miles',
-      startDateTime: new Date(timeRange.start).toISOString().replace('.000', ''),
-      endDateTime: new Date(timeRange.end).toISOString().replace('.000', ''),
+      startDateTime: formatDateTime(timeRange.start),
+      endDateTime: formatDateTime(timeRange.end),
       size: String(this.eventsConfig.limit),
       sort: 'date,asc',
     });
@@ -319,38 +324,18 @@ export class PhoenixEventsPlugin extends BasePlugin {
 
   /**
    * Fetch events from Phoenix Open Data special events permits.
+   * NOTE: Phoenix Open Data has discontinued the Socrata API for this dataset.
    */
-  private async fetchPhoenixPermitEvents(options: PluginFetchOptions): Promise<Alert[]> {
-    const { timeRange } = options;
-
-    // Phoenix special events dataset (if available)
-    // Note: This endpoint may need to be updated based on actual Phoenix Open Data availability
-    const baseUrl = 'https://www.phoenixopendata.com/resource/yqvh-8bti.json';
-
-    const params = new URLSearchParams({
-      $limit: String(this.eventsConfig.limit),
-      $order: 'start_date ASC',
-    });
-
-    // Filter by date range
-    const startDate = timeRange.start.split('T')[0];
-    const endDate = timeRange.end.split('T')[0];
-    params.set('$where', `start_date >= '${startDate}' AND start_date <= '${endDate}'`);
-
-    if (this.eventsConfig.socrataAppToken) {
-      params.set('$$app_token', this.eventsConfig.socrataAppToken);
-    }
-
-    const url = `${baseUrl}?${params}`;
-
-    try {
-      const events = await this.fetchJson<PhoenixSpecialEvent[]>(url);
-      return events.map((event) => this.transformPhoenixPermitEvent(event));
-    } catch (error) {
-      // Phoenix permits endpoint might not always be available
-      console.warn('Phoenix permits fetch failed, continuing with other sources:', error);
-      return [];
-    }
+  private async fetchPhoenixPermitEvents(_options: PluginFetchOptions): Promise<Alert[]> {
+    // NOTE: Phoenix Open Data no longer provides a Socrata API for special events permits.
+    // The endpoint https://www.phoenixopendata.com/resource/yqvh-8bti.json returns 404.
+    // This method returns empty and logs a warning.
+    // The Ticketmaster source continues to work if an API key is configured.
+    console.warn(
+      'Phoenix permits fetch failed, continuing with other sources:',
+      'Phoenix Open Data has discontinued the Socrata API for special events permits.'
+    );
+    return [];
   }
 
   /**

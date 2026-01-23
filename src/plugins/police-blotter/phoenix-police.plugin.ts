@@ -93,31 +93,23 @@ export class PhoenixPolicePlugin extends BasePlugin {
   }
 
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
-    const { location, timeRange, radiusMeters, limit } = options;
     const cacheKey = this.generateCacheKey(options);
 
-    // Build Socrata API URL
-    const url = this.buildApiUrl(location, timeRange, radiusMeters, limit);
+    // NOTE: Phoenix Open Data no longer provides a Socrata API for crime data.
+    // The data is only available as CSV downloads, which is not suitable for real-time querying.
+    // This plugin is kept for backwards compatibility but returns empty results.
+    // See: https://www.phoenixopendata.com/dataset/crime-data
+    const warnings = [
+      'Phoenix Police data source unavailable: Phoenix Open Data has discontinued the Socrata API. ' +
+      'Crime data is now only available as CSV downloads, which cannot be queried in real-time.'
+    ];
 
-    try {
-      const { data, fromCache } = await this.getCachedOrFetch(
-        cacheKey,
-        () => this.fetchIncidents(url),
-        this.config.cacheTtlMs
-      );
-
-      const alerts = data.map((incident) => this.transformIncident(incident));
-
-      return {
-        alerts,
-        fromCache,
-        cacheKey,
-      };
-    } catch (error) {
-      // Log and return empty on non-critical errors
-      console.error('Phoenix Police fetch error:', error);
-      throw error;
-    }
+    return {
+      alerts: [],
+      fromCache: false,
+      cacheKey,
+      warnings,
+    };
   }
 
   /**

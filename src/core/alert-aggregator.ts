@@ -80,11 +80,13 @@ export class AlertAggregator {
   /**
    * Remove duplicate alerts based on ID and source.
    *
-   * If two alerts have the same external ID from the same source,
+   * If two alerts have the same ID or the same external ID from the same source,
    * keep the one with the most recent issued timestamp.
    */
   deduplicate(alerts: Alert[]): Alert[] {
-    const seen = new Map<string, Alert>();
+    // Use two maps: one for lookup and one for tracking unique alerts
+    const seenByPrimaryKey = new Map<string, Alert>();
+    const seenBySecondaryKey = new Map<string, string>(); // secondary key -> primary key
 
     for (const alert of alerts) {
       // Primary dedup key: alert ID
@@ -95,32 +97,39 @@ export class AlertAggregator {
         ? `${alert.source.pluginId}:${alert.source.externalId}`
         : null;
 
+      // Check if we've seen this secondary key before
+      if (secondaryKey) {
+        const existingPrimaryKey = seenBySecondaryKey.get(secondaryKey);
+        if (existingPrimaryKey) {
+          const existing = seenByPrimaryKey.get(existingPrimaryKey);
+          if (existing && new Date(alert.timestamps.issued) > new Date(existing.timestamps.issued)) {
+            // Replace with newer alert
+            seenByPrimaryKey.delete(existingPrimaryKey);
+            seenByPrimaryKey.set(primaryKey, alert);
+            seenBySecondaryKey.set(secondaryKey, primaryKey);
+          }
+          continue;
+        }
+      }
+
       // Check primary key
-      const existingPrimary = seen.get(primaryKey);
+      const existingPrimary = seenByPrimaryKey.get(primaryKey);
       if (existingPrimary) {
         // Keep the more recent one
         if (new Date(alert.timestamps.issued) > new Date(existingPrimary.timestamps.issued)) {
-          seen.set(primaryKey, alert);
+          seenByPrimaryKey.set(primaryKey, alert);
         }
         continue;
       }
 
-      // Check secondary key
+      // New alert - store it
+      seenByPrimaryKey.set(primaryKey, alert);
       if (secondaryKey) {
-        const existingSecondary = seen.get(secondaryKey);
-        if (existingSecondary) {
-          if (new Date(alert.timestamps.issued) > new Date(existingSecondary.timestamps.issued)) {
-            seen.set(secondaryKey, alert);
-          }
-          continue;
-        }
-        seen.set(secondaryKey, alert);
+        seenBySecondaryKey.set(secondaryKey, primaryKey);
       }
-
-      seen.set(primaryKey, alert);
     }
 
-    return Array.from(seen.values());
+    return Array.from(seenByPrimaryKey.values());
   }
 
   /**

@@ -163,99 +163,79 @@ export class ArizonaTrafficPlugin extends BasePlugin {
   }
 
   /**
-   * Fetch traffic events from ADOT sources.
+   * Fetch traffic events from ADOT consolidated endpoint.
    */
   private async fetchTrafficEvents(
     location: { latitude: number; longitude: number },
     radiusMeters: number,
     warnings: string[]
   ) {
-    const allAlerts: ReturnType<typeof this.transformEvent>[] = [];
+    try {
+      // ADOT now uses a single consolidated endpoint for all traffic events
+      const events = await this.fetchFromSource(this.buildTrafficEventsUrl(), 'traffic');
 
-    // Fetch from multiple ADOT endpoints
-    const sources = [
-      { url: this.buildIncidentsUrl(location), type: 'incidents' },
-      { url: this.buildConstructionUrl(location), type: 'construction' },
-      { url: this.buildClosuresUrl(location), type: 'closures' },
-    ];
-
-    for (const source of sources) {
-      if (!this.trafficConfig.includeConstruction && source.type === 'construction') {
-        continue;
-      }
-
-      try {
-        const events = await this.fetchFromSource(source.url, source.type);
-        const filtered = events.filter((event) => {
-          // Filter by location
-          const distance = this.calculateDistance(
-            location.latitude,
-            location.longitude,
-            event.latitude,
-            event.longitude
-          );
-          if (distance > radiusMeters) return false;
-
-          // Filter by closures only if configured
-          if (this.trafficConfig.closuresOnly) {
-            const eventType = (event.event_type ?? '').toUpperCase();
-            if (!eventType.includes('CLOSURE') && !eventType.includes('CLOSED')) {
-              return false;
-            }
-          }
-
-          // Filter by minimum delay
-          if (this.trafficConfig.minDelayMinutes && event.delay_minutes) {
-            if (event.delay_minutes < this.trafficConfig.minDelayMinutes) {
-              return false;
-            }
-          }
-
-          return true;
-        });
-
-        const alerts = filtered.map((event) => this.transformEvent(event));
-        allAlerts.push(...alerts);
-      } catch (error) {
-        warnings.push(
-          `Failed to fetch ${source.type}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      const filtered = events.filter((event) => {
+        // Filter by location
+        const distance = this.calculateDistance(
+          location.latitude,
+          location.longitude,
+          event.latitude,
+          event.longitude
         );
-      }
+        if (distance > radiusMeters) return false;
+
+        // Filter out construction if not configured
+        if (!this.trafficConfig.includeConstruction) {
+          const eventType = (event.event_type ?? '').toUpperCase();
+          if (eventType.includes('CONSTRUCTION') || eventType.includes('ROADWORK')) {
+            return false;
+          }
+        }
+
+        // Filter by closures only if configured
+        if (this.trafficConfig.closuresOnly) {
+          const eventType = (event.event_type ?? '').toUpperCase();
+          if (!eventType.includes('CLOSURE') && !eventType.includes('CLOSED')) {
+            return false;
+          }
+        }
+
+        // Filter by minimum delay
+        if (this.trafficConfig.minDelayMinutes && event.delay_minutes) {
+          if (event.delay_minutes < this.trafficConfig.minDelayMinutes) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+
+      const alerts = filtered.map((event) => this.transformEvent(event));
+
+      // Deduplicate by ID
+      const seen = new Set<string>();
+      return alerts.filter((alert) => {
+        if (seen.has(alert.id)) return false;
+        seen.add(alert.id);
+        return true;
+      });
+    } catch (error) {
+      warnings.push(
+        `Failed to fetch traffic events: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      return [];
     }
-
-    // Deduplicate by ID
-    const seen = new Set<string>();
-    return allAlerts.filter((alert) => {
-      if (seen.has(alert.id)) return false;
-      seen.add(alert.id);
-      return true;
-    });
   }
 
   /**
-   * Build URL for traffic incidents.
-   * Note: Location filtering is done client-side after fetching all Arizona data.
+   * Build URL for traffic events (incidents, construction, closures).
+   * Note: ADOT consolidated all traffic events into a single endpoint.
+   * Location filtering is done client-side after fetching all Arizona data.
    */
-  private buildIncidentsUrl(_location: { latitude: number; longitude: number }): string {
-    // ADOT Open Data Portal - Traffic Events
-    // Note: This is a public GeoJSON endpoint
-    return 'https://services1.arcgis.com/0MSEUqKaxRlEPj5g/arcgis/rest/services/ADOT_Traffic_Events/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson';
-  }
-
-  /**
-   * Build URL for construction events.
-   * Note: Location filtering is done client-side after fetching all Arizona data.
-   */
-  private buildConstructionUrl(_location: { latitude: number; longitude: number }): string {
-    return 'https://services1.arcgis.com/0MSEUqKaxRlEPj5g/arcgis/rest/services/ADOT_Construction_Projects/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson';
-  }
-
-  /**
-   * Build URL for road closures.
-   * Note: Location filtering is done client-side after fetching all Arizona data.
-   */
-  private buildClosuresUrl(_location: { latitude: number; longitude: number }): string {
-    return 'https://services1.arcgis.com/0MSEUqKaxRlEPj5g/arcgis/rest/services/ADOT_Road_Closures/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson';
+  private buildTrafficEventsUrl(): string {
+    // ADOT Open Data Portal - Traffic Events (consolidated endpoint)
+    // Note: This is a public GeoJSON endpoint on the updated ArcGIS server
+    return 'https://services6.arcgis.com/clPWQMwZfdWn4MQZ/arcgis/rest/services/ADOT_Traffic_Events/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson';
   }
 
   /**
@@ -305,26 +285,37 @@ export class ArizonaTrafficPlugin extends BasePlugin {
       }
     }
 
+    // Handle timestamp fields (ADOT uses epoch milliseconds)
+    const parseTimestamp = (value: unknown): string | undefined => {
+      if (typeof value === 'number') {
+        return new Date(value).toISOString();
+      }
+      if (typeof value === 'string') {
+        return value;
+      }
+      return undefined;
+    };
+
     return {
-      id: feature.id?.toString() ?? String(props.OBJECTID ?? props.id ?? Date.now()),
-      event_type: String(props.EVENT_TYPE ?? props.Type ?? props.event_type ?? sourceType).toUpperCase(),
-      event_subtype: props.EVENT_SUBTYPE as string | undefined,
-      severity: props.SEVERITY as string | undefined,
+      id: feature.id?.toString() ?? String(props.ObjectId ?? props.ID ?? props.OBJECTID ?? Date.now()),
+      event_type: String(props.EventType ?? props.EVENT_TYPE ?? props.Type ?? sourceType).toUpperCase(),
+      event_subtype: (props.EventSubType ?? props.EVENT_SUBTYPE) as string | undefined,
+      severity: (props.Severity ?? props.SEVERITY) as string | undefined,
       headline: (props.HEADLINE ?? props.Title ?? props.headline) as string | undefined,
-      description: (props.DESCRIPTION ?? props.Description ?? props.description) as string | undefined,
-      road_name: (props.ROAD_NAME ?? props.Route ?? props.road_name) as string | undefined,
-      direction: props.DIRECTION as string | undefined,
+      description: (props.Description ?? props.DESCRIPTION) as string | undefined,
+      road_name: (props.RoadwayName ?? props.ROAD_NAME ?? props.Route) as string | undefined,
+      direction: (props.DirectionOfTravel ?? props.DIRECTION) as string | undefined,
       from_location: props.FROM_LOCATION as string | undefined,
       to_location: props.TO_LOCATION as string | undefined,
       latitude,
       longitude,
-      start_time: (props.START_TIME ?? props.StartDate ?? props.start_time) as string | undefined,
-      end_time: (props.END_TIME ?? props.EndDate ?? props.end_time) as string | undefined,
-      last_updated: (props.LAST_UPDATED ?? props.LastUpdated ?? props.last_updated) as string | undefined,
-      lanes_affected: props.LANES_AFFECTED as string | undefined,
+      start_time: parseTimestamp(props.StartDate ?? props.START_TIME ?? props.Reported),
+      end_time: parseTimestamp(props.PlannedEndDate ?? props.END_TIME ?? props.EndDate),
+      last_updated: parseTimestamp(props.LastUpdated ?? props.LAST_UPDATED),
+      lanes_affected: (props.LanesAffected ?? props.LANES_AFFECTED) as string | undefined,
       lanes_blocked: props.LANES_BLOCKED as string | undefined,
       delay_minutes: props.DELAY_MINUTES as number | undefined,
-      is_major: Boolean(props.IS_MAJOR ?? props.Major),
+      is_major: Boolean(props.IsFullClosure ?? props.IS_MAJOR ?? props.Major),
     };
   }
 
