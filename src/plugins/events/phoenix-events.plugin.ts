@@ -54,37 +54,15 @@ interface TicketmasterResponse {
 }
 
 /**
- * Phoenix Special Events permit structure.
- */
-interface PhoenixSpecialEvent {
-  event_name?: string;
-  event_type?: string;
-  event_location?: string;
-  start_date?: string;
-  end_date?: string;
-  start_time?: string;
-  end_time?: string;
-  description?: string;
-  street_closure?: string;
-  permit_number?: string;
-  latitude?: string;
-  longitude?: string;
-}
-
-/**
  * Phoenix Events plugin configuration.
  */
 export interface PhoenixEventsPluginConfig extends BasePluginConfig {
   /** Ticketmaster API key (required for Ticketmaster data) */
   ticketmasterApiKey?: string;
-  /** Socrata app token for Phoenix Open Data (optional) */
-  socrataAppToken?: string;
-  /** Maximum events to fetch from each source. Default: 100 */
+  /** Maximum events to fetch. Default: 100 */
   limit?: number;
   /** Enable Ticketmaster source. Default: true if API key provided */
   enableTicketmaster?: boolean;
-  /** Enable Phoenix permits source. Default: true */
-  enablePhoenixPermits?: boolean;
 }
 
 /**
@@ -116,30 +94,14 @@ const PHOENIX_VENUES: Record<string, { latitude: number; longitude: number }> = 
 };
 
 /**
- * Event types that may cause civil unrest concerns.
- */
-const CIVIL_UNREST_KEYWORDS = [
-  'protest',
-  'march',
-  'rally',
-  'demonstration',
-  'strike',
-  'political',
-];
-
-/**
- * Plugin that fetches event data from Ticketmaster and Phoenix city permits.
- *
- * Aggregates from:
- * - Ticketmaster Discovery API for concerts, sports, theater
- * - Phoenix Open Data for special event permits (street closures, parades)
+ * Plugin that fetches event data from Ticketmaster.
  */
 export class PhoenixEventsPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'phoenix-events',
     name: 'Phoenix Events',
-    version: '1.0.0',
-    description: 'Events from Ticketmaster and Phoenix city permits',
+    version: '2.0.0',
+    description: 'Events from Ticketmaster Discovery API',
     coverage: {
       type: 'regional',
       center: PHOENIX_DOWNTOWN,
@@ -147,7 +109,7 @@ export class PhoenixEventsPlugin extends BasePlugin {
       description: 'Downtown Phoenix area',
     },
     supportedTemporalTypes: ['scheduled'],
-    supportedCategories: ['event', 'civil-unrest'],
+    supportedCategories: ['event'],
     refreshIntervalMs: 30 * 60 * 1000, // 30 minutes
   };
 
@@ -157,7 +119,6 @@ export class PhoenixEventsPlugin extends BasePlugin {
     super(config);
     this.eventsConfig = {
       limit: 100,
-      enablePhoenixPermits: true,
       ...config,
       enableTicketmaster: config?.enableTicketmaster ?? !!config?.ticketmasterApiKey,
     };
@@ -167,10 +128,20 @@ export class PhoenixEventsPlugin extends BasePlugin {
     const cacheKey = this.generateCacheKey(options);
     const warnings: string[] = [];
 
+    // Check if Ticketmaster is enabled
+    if (!this.eventsConfig.enableTicketmaster || !this.eventsConfig.ticketmasterApiKey) {
+      return {
+        alerts: [],
+        fromCache: false,
+        cacheKey,
+        warnings: ['Ticketmaster API key not configured'],
+      };
+    }
+
     try {
       const { data, fromCache } = await this.getCachedOrFetch(
         cacheKey,
-        () => this.fetchAllEvents(options, warnings),
+        () => this.fetchTicketmasterEvents(options),
         this.config.cacheTtlMs
       );
 
@@ -190,43 +161,6 @@ export class PhoenixEventsPlugin extends BasePlugin {
       console.error('Phoenix Events fetch error:', error);
       throw error;
     }
-  }
-
-  /**
-   * Fetch events from all enabled sources.
-   */
-  private async fetchAllEvents(
-    options: PluginFetchOptions,
-    warnings: string[]
-  ): Promise<Alert[]> {
-    const allAlerts: Alert[] = [];
-
-    // Fetch from Ticketmaster
-    if (this.eventsConfig.enableTicketmaster && this.eventsConfig.ticketmasterApiKey) {
-      try {
-        const tmAlerts = await this.fetchTicketmasterEvents(options);
-        allAlerts.push(...tmAlerts);
-      } catch (error) {
-        warnings.push(
-          `Ticketmaster fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
-      }
-    }
-
-    // Fetch from Phoenix permits
-    if (this.eventsConfig.enablePhoenixPermits) {
-      try {
-        const permitAlerts = await this.fetchPhoenixPermitEvents(options);
-        allAlerts.push(...permitAlerts);
-      } catch (error) {
-        warnings.push(
-          `Phoenix permits fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
-      }
-    }
-
-    // Deduplicate events by venue + date
-    return this.deduplicateEvents(allAlerts);
   }
 
   /**
@@ -294,7 +228,7 @@ export class PhoenixEventsPlugin extends BasePlugin {
       id: `tm-${event.id}`,
       externalId: event.id,
       title: event.name,
-      description: this.buildTicketmasterDescription(event, classification, venue),
+      description: this.buildDescription(event, classification, venue),
       riskLevel,
       priority: this.riskLevelToPriority(riskLevel),
       category: 'event',
@@ -323,74 +257,7 @@ export class PhoenixEventsPlugin extends BasePlugin {
   }
 
   /**
-   * Fetch events from Phoenix Open Data special events permits.
-   * NOTE: Phoenix Open Data has discontinued the Socrata API for this dataset.
-   */
-  private async fetchPhoenixPermitEvents(_options: PluginFetchOptions): Promise<Alert[]> {
-    // NOTE: Phoenix Open Data no longer provides a Socrata API for special events permits.
-    // The endpoint https://www.phoenixopendata.com/resource/yqvh-8bti.json returns 404.
-    // This method returns empty and logs a warning.
-    // The Ticketmaster source continues to work if an API key is configured.
-    console.warn(
-      'Phoenix permits fetch failed, continuing with other sources:',
-      'Phoenix Open Data has discontinued the Socrata API for special events permits.'
-    );
-    return [];
-  }
-
-  /**
-   * Transform a Phoenix permit event to our Alert format.
-   */
-  private transformPhoenixPermitEvent(event: PhoenixSpecialEvent): Alert {
-    // Parse location
-    const latitude = event.latitude ? parseFloat(event.latitude) : PHOENIX_DOWNTOWN.latitude;
-    const longitude = event.longitude ? parseFloat(event.longitude) : PHOENIX_DOWNTOWN.longitude;
-
-    // Build timestamps
-    const startDate = event.start_date ?? new Date().toISOString().split('T')[0];
-    const startTime = event.start_time ?? '00:00:00';
-    const startDateTime = `${startDate}T${startTime}`;
-
-    let endDateTime: string | undefined;
-    if (event.end_date) {
-      const endTime = event.end_time ?? '23:59:59';
-      endDateTime = `${event.end_date}T${endTime}`;
-    }
-
-    // Determine category and risk
-    const { category, riskLevel } = this.assessPermitEventRisk(event);
-
-    return this.createAlert({
-      id: `phoenix-permit-${event.permit_number ?? Date.now()}`,
-      externalId: event.permit_number,
-      title: event.event_name ?? 'Special Event',
-      description: this.buildPermitDescription(event),
-      riskLevel,
-      priority: this.riskLevelToPriority(riskLevel),
-      category,
-      temporalType: 'scheduled',
-      location: {
-        point: { latitude, longitude },
-        address: event.event_location,
-        city: 'Phoenix',
-        state: 'AZ',
-      },
-      timestamps: {
-        issued: new Date().toISOString(),
-        eventStart: startDateTime,
-        eventEnd: endDateTime,
-      },
-      metadata: {
-        source: 'phoenix-permits',
-        eventType: event.event_type,
-        streetClosure: event.street_closure,
-        permitNumber: event.permit_number,
-      },
-    });
-  }
-
-  /**
-   * Assess risk level for a Ticketmaster event.
+   * Assess risk level for an event.
    */
   private assessEventRisk(event: TicketmasterEvent, venueName?: string): RiskLevel {
     // Large venue events have higher crowd impact
@@ -414,36 +281,9 @@ export class PhoenixEventsPlugin extends BasePlugin {
   }
 
   /**
-   * Assess risk and category for a permit event.
+   * Build description for event.
    */
-  private assessPermitEventRisk(
-    event: PhoenixSpecialEvent
-  ): { category: Alert['category']; riskLevel: RiskLevel } {
-    const name = (event.event_name ?? '').toLowerCase();
-    const type = (event.event_type ?? '').toLowerCase();
-    const description = (event.description ?? '').toLowerCase();
-    const combined = `${name} ${type} ${description}`;
-
-    // Check for civil unrest indicators
-    for (const keyword of CIVIL_UNREST_KEYWORDS) {
-      if (combined.includes(keyword)) {
-        return { category: 'civil-unrest', riskLevel: 'moderate' };
-      }
-    }
-
-    // Check for street closures
-    if (event.street_closure && event.street_closure.toLowerCase() !== 'no') {
-      return { category: 'event', riskLevel: 'moderate' };
-    }
-
-    // Default
-    return { category: 'event', riskLevel: 'low' };
-  }
-
-  /**
-   * Build description for Ticketmaster event.
-   */
-  private buildTicketmasterDescription(
+  private buildDescription(
     event: TicketmasterEvent,
     classification?: { segment?: { name: string }; genre?: { name: string } },
     venue?: { name: string }
@@ -468,60 +308,5 @@ export class PhoenixEventsPlugin extends BasePlugin {
     }
 
     return parts.join('\n');
-  }
-
-  /**
-   * Build description for permit event.
-   */
-  private buildPermitDescription(event: PhoenixSpecialEvent): string {
-    const parts: string[] = [];
-
-    if (event.event_type) {
-      parts.push(`Type: ${event.event_type}`);
-    }
-
-    if (event.event_location) {
-      parts.push(`Location: ${event.event_location}`);
-    }
-
-    if (event.description) {
-      parts.push(`\n${event.description}`);
-    }
-
-    if (event.street_closure && event.street_closure.toLowerCase() !== 'no') {
-      parts.push(`\nStreet Closure: ${event.street_closure}`);
-    }
-
-    return parts.join('\n');
-  }
-
-  /**
-   * Deduplicate events that might appear in both sources.
-   */
-  private deduplicateEvents(alerts: Alert[]): Alert[] {
-    const seen = new Map<string, Alert>();
-
-    for (const alert of alerts) {
-      // Create dedup key from venue + date
-      const venue =
-        (alert.metadata?.venue as string) ?? alert.location.address ?? 'unknown';
-      const date = alert.timestamps.eventStart?.split('T')[0] ?? '';
-      const key = `${venue.toLowerCase()}-${date}`;
-
-      const existing = seen.get(key);
-      if (!existing) {
-        seen.set(key, alert);
-      } else {
-        // Prefer Ticketmaster data (usually more complete)
-        if (
-          alert.metadata?.source === 'ticketmaster' &&
-          existing.metadata?.source !== 'ticketmaster'
-        ) {
-          seen.set(key, alert);
-        }
-      }
-    }
-
-    return Array.from(seen.values());
   }
 }

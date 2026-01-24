@@ -192,7 +192,7 @@ export class PhoenixFirePlugin extends BasePlugin {
 
         // Filter by categories if specified
         if (categories && categories.length > 0) {
-          const alertCategory = this.mapTypeToCategory(f.properties.TYPE, f.properties.CATEGORY);
+          const alertCategory = this.mapTypeToCategory(f.properties.TYPE);
           if (!categories.includes(alertCategory)) return false;
         }
 
@@ -204,9 +204,9 @@ export class PhoenixFirePlugin extends BasePlugin {
   }
 
   /**
-   * Map incident type and category to alert category.
+   * Map incident type to alert category.
    */
-  private mapTypeToCategory(type: string, category: string): AlertCategory {
+  private mapTypeToCategory(type: string): AlertCategory {
     if (type === 'FIRE') return 'fire';
     if (type === 'EMS') return 'medical';
     return 'fire';

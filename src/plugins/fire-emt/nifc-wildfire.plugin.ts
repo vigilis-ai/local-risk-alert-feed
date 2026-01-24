@@ -108,7 +108,7 @@ export class NIFCWildfirePlugin extends BasePlugin {
     version: '1.0.0',
     description: 'Active wildfire incidents from National Interagency Fire Center',
     coverage: {
-      type: 'national',
+      type: 'global',
       center: US_CENTER,
       radiusMeters: US_COVERAGE_RADIUS_METERS,
       description: 'United States wildfire incidents',
@@ -252,7 +252,6 @@ export class NIFCWildfirePlugin extends BasePlugin {
         point: { latitude, longitude },
         city: incident.POOCity,
         state,
-        country: 'US',
       },
       timestamps: {
         issued: modifiedTime,

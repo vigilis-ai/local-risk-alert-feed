@@ -1,6 +1,6 @@
 {
   "name": "local-risk-alert-feed",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "TypeScript library for aggregating local risk alerts from multiple data sources via a plugin system",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -21,11 +21,6 @@
       "require": "./dist/cjs/adapters/vercel.js",
       "types": "./dist/types/adapters/vercel.d.ts"
     },
-    "./plugins/police-blotter": {
-      "import": "./dist/esm/plugins/police-blotter/index.js",
-      "require": "./dist/cjs/plugins/police-blotter/index.js",
-      "types": "./dist/types/plugins/police-blotter/index.d.ts"
-    },
     "./plugins/fire-emt": {
       "import": "./dist/esm/plugins/fire-emt/index.js",
       "require": "./dist/cjs/plugins/fire-emt/index.js",
@@ -40,11 +35,6 @@
       "import": "./dist/esm/plugins/weather/index.js",
       "require": "./dist/cjs/plugins/weather/index.js",
       "types": "./dist/types/plugins/weather/index.d.ts"
-    },
-    "./plugins/pulsepoint": {
-      "import": "./dist/esm/plugins/pulsepoint/index.js",
-      "require": "./dist/cjs/plugins/pulsepoint/index.js",
-      "types": "./dist/types/plugins/pulsepoint/index.d.ts"
     },
     "./plugins/traffic": {
       "import": "./dist/esm/plugins/traffic/index.js",
