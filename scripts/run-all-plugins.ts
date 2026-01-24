@@ -16,7 +16,7 @@ interface LocationTest {
   longitude: number;
 }
 
-async function runTest(location: LocationTest) {
+async function runTest(location: LocationTest, radiusMeters: number = 2000) {
   const output: string[] = [];
   const log = (msg: string) => {
     console.log(msg);
@@ -29,6 +29,7 @@ async function runTest(location: LocationTest) {
   log('');
   log(`Location: ${location.name}`);
   log(`Coordinates: ${location.latitude}, ${location.longitude}`);
+  log(`Radius: ${radiusMeters}m (${(radiusMeters / 1000).toFixed(1)}km)`);
   log(`Timestamp: ${new Date().toISOString()}`);
   log('');
 
@@ -72,7 +73,6 @@ async function runTest(location: LocationTest) {
   log('-'.repeat(80));
 
   const timeRange = 'past-7d';
-  const radiusMeters = 25000; // 25km radius
 
   log(`  Time Range: ${timeRange}`);
   log(`  Radius: ${radiusMeters}m (${(radiusMeters / 1000).toFixed(1)}km)`);
