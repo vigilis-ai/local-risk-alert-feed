@@ -1,6 +1,6 @@
 {
   "name": "local-risk-alert-feed",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "TypeScript library for aggregating local risk alerts from multiple data sources via a plugin system",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -78,22 +78,6 @@
   },
   "dependencies": {
     "zod": "^3.25.76"
-  },
-  "peerDependencies": {
-    "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/lib-dynamodb": "^3.0.0",
-    "@vercel/kv": "^1.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@aws-sdk/client-dynamodb": {
-      "optional": true
-    },
-    "@aws-sdk/lib-dynamodb": {
-      "optional": true
-    },
-    "@vercel/kv": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.131",

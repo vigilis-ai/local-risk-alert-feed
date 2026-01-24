@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] - 2026-01-23
+
+### Added
+- Comprehensive README.md with usage documentation, plugin configuration, cache providers, and examples
+
+## [0.2.2] - 2026-01-23
+
+### Changed
+- **Cache providers are now fully interface-based** - Removed peer dependencies on `@vercel/kv` and `@aws-sdk/*`
+  - `VercelKVCacheProvider` and `DynamoDBCacheProvider` now accept any object matching the interface
+  - Host applications pass their own SDK instances, avoiding version conflicts
+  - `InMemoryCacheProvider` remains the zero-dependency default
+
 ## [0.2.1] - 2026-01-23
 
 ### Added
