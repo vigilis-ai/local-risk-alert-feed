@@ -155,6 +155,7 @@ export class AustinCrimePlugin extends BasePlugin {
     supportedTemporalTypes: ['historical', 'real-time'],
     supportedCategories: ['crime'],
     refreshIntervalMs: 60 * 60 * 1000, // 1 hour
+    defaultRadiusMeters: 10_000,
   };
 
   private crimeConfig: AustinCrimePluginConfig;

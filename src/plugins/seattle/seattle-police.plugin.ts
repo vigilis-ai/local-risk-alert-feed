@@ -234,6 +234,7 @@ export class SeattlePolicePlugin extends BasePlugin {
     supportedTemporalTypes: ['historical', 'real-time'],
     supportedCategories: ['crime', 'traffic', 'other'],
     refreshIntervalMs: 15 * 60 * 1000,
+    defaultRadiusMeters: 1_000,
   };
 
   private policeConfig: SeattlePolicePluginConfig;

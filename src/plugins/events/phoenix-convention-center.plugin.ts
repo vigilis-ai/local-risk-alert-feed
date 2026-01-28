@@ -101,6 +101,7 @@ export class PhoenixConventionCenterPlugin extends BasePlugin {
     supportedTemporalTypes: ['scheduled'],
     supportedCategories: ['event'],
     refreshIntervalMs: 60 * 60 * 1000, // 1 hour
+    defaultRadiusMeters: 10_000,
   };
 
   private pluginConfig: PhoenixConventionCenterPluginConfig;

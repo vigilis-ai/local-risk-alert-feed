@@ -88,6 +88,8 @@ export interface PluginMetadata {
   supportedCategories: AlertCategory[];
   /** Suggested refresh interval in milliseconds */
   refreshIntervalMs?: number;
+  /** Default query radius in meters when the caller does not specify one */
+  defaultRadiusMeters?: number;
 }
 
 /**

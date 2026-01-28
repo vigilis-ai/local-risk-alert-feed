@@ -78,8 +78,8 @@ export interface AlertQueryMeta {
   timeRange: TimeRange;
   /** Location that was queried */
   location: GeoPoint;
-  /** Radius used for the query */
-  radiusMeters: number;
+  /** Radius used for the query (undefined when each plugin used its own default) */
+  radiusMeters?: number;
   /** Whether results were truncated due to limit */
   truncated: boolean;
 }

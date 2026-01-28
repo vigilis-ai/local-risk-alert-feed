@@ -103,6 +103,7 @@ export class SeattleEMTPlugin extends BasePlugin {
     supportedTemporalTypes: ['real-time'],
     supportedCategories: ['medical'],
     refreshIntervalMs: 5 * 60 * 1000,
+    defaultRadiusMeters: 1_000,
   };
 
   private emtConfig: SeattleEMTPluginConfig;

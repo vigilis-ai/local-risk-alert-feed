@@ -107,6 +107,7 @@ export class PhoenixFirePlugin extends BasePlugin {
     supportedTemporalTypes: ['historical', 'real-time'],
     supportedCategories: ['fire', 'medical'],
     refreshIntervalMs: 5 * 60 * 1000, // 5 minutes
+    defaultRadiusMeters: 10_000,
   };
 
   private fireConfig: PhoenixFirePluginConfig;

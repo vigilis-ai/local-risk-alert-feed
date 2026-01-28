@@ -140,6 +140,7 @@ export class BendPolicePlugin extends BasePlugin {
     supportedTemporalTypes: ['historical', 'real-time'],
     supportedCategories: ['crime', 'traffic', 'other'],
     refreshIntervalMs: 5 * 60 * 1000, // 5 minutes
+    defaultRadiusMeters: 15_000,
   };
 
   private policeConfig: BendPolicePluginConfig;

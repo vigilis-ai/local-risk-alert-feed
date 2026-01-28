@@ -115,6 +115,7 @@ export class SeattleFirePlugin extends BasePlugin {
     supportedTemporalTypes: ['real-time'],
     supportedCategories: ['fire'],
     refreshIntervalMs: 5 * 60 * 1000,
+    defaultRadiusMeters: 1_000,
   };
 
   private fireConfig: SeattleFirePluginConfig;

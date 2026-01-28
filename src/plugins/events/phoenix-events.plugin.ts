@@ -117,6 +117,7 @@ export class PhoenixEventsPlugin extends BasePlugin {
     supportedTemporalTypes: ['scheduled'],
     supportedCategories: ['event'],
     refreshIntervalMs: 30 * 60 * 1000, // 30 minutes
+    defaultRadiusMeters: 10_000,
   };
 
   private eventsConfig: PhoenixEventsPluginConfig;

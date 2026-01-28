@@ -2,7 +2,8 @@
  * Test Seattle plugins for a specific location.
  *
  * Usage: npx tsx scripts/test-seattle.ts [lat] [lng] [radius]
- * Default: Pike Place Market (47.6097, -122.3422) with 10km radius
+ * Default: Pike Place Market (47.6097, -122.3422)
+ * If radius is omitted, runs twice: once with plugin defaults, once with 10km explicit radius.
  */
 
 import { AlertFeed } from '../src';
@@ -13,13 +14,13 @@ async function testSeattle() {
   const args = process.argv.slice(2);
   const latitude = parseFloat(args[0]) || 47.6097;
   const longitude = parseFloat(args[1]) || -122.3422;
-  const radiusMeters = parseInt(args[2], 10) || 10000;
+  const radiusArg = args[2] ? parseInt(args[2], 10) : undefined;
 
   console.log('='.repeat(70));
   console.log('SEATTLE PLUGIN TEST');
   console.log('='.repeat(70));
   console.log(`Location: ${latitude}, ${longitude} (Pike Place Market)`);
-  console.log(`Radius: ${radiusMeters}m (${(radiusMeters / 1000).toFixed(1)}km)`);
+  console.log(`Radius arg: ${radiusArg !== undefined ? `${radiusArg}m (${(radiusArg / 1000).toFixed(1)}km)` : '(none — will use plugin defaults)'}`);
   console.log(`Time: ${new Date().toISOString()}`);
   console.log('');
 
@@ -46,27 +47,31 @@ async function testSeattle() {
     console.log(`  Categories: ${p.supportedCategories.join(', ')}`);
     console.log(`  Coverage: ${p.coverage.description || p.coverage.type}`);
     console.log(`  Temporal: ${p.temporal.freshnessDescription}`);
+    console.log(`  Default Radius: ${p.defaultRadiusMeters != null ? `${p.defaultRadiusMeters}m (${(p.defaultRadiusMeters / 1000).toFixed(1)}km)` : '(framework default)'}`);
   }
 
   // Test with past-7d to now+1d range (covers both historical and current)
-  console.log('\n' + '-'.repeat(70));
-  console.log('QUERY: past-7d to now+1d (combines historical and current)');
-  console.log('-'.repeat(70));
-
   const now = new Date();
   const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const end = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
 
+  // --- Run 1: with explicit radius (or plugin defaults if no arg) ---
+  const queryRadius = radiusArg;
+  console.log('\n' + '-'.repeat(70));
+  console.log(`QUERY: past-7d to now+1d | radius=${queryRadius !== undefined ? `${queryRadius}m (explicit)` : '(plugin defaults)'}`);
+  console.log('-'.repeat(70));
+
   const response = await feed.query({
     location: { latitude, longitude },
     timeRange: { start: start.toISOString(), end: end.toISOString() },
-    radiusMeters,
+    radiusMeters: queryRadius,
     limit: 200,
     includePluginResults: true,
   });
 
   console.log(`\nTime Range: ${response.meta.timeRange.start} to ${response.meta.timeRange.end}`);
   console.log(`Total Alerts: ${response.meta.totalCount}`);
+  console.log(`Radius in meta: ${response.meta.radiusMeters != null ? `${response.meta.radiusMeters}m` : '(per-plugin defaults)'}`);
   console.log(`Truncated: ${response.meta.truncated}`);
 
   console.log('\nPlugin Results:');
@@ -171,6 +176,40 @@ async function testSeattle() {
     if (alerts.length > 3) {
       console.log(`\n    ... and ${alerts.length - 3} more ${category} alerts`);
     }
+  }
+
+  // --- Run 2: compare with explicit 10km radius when plugin defaults were used ---
+  if (queryRadius === undefined) {
+    const explicitRadius = 10_000;
+    console.log('\n' + '='.repeat(70));
+    console.log(`COMPARISON QUERY: explicit ${explicitRadius}m radius`);
+    console.log('='.repeat(70));
+
+    const response2 = await feed.query({
+      location: { latitude, longitude },
+      timeRange: { start: start.toISOString(), end: end.toISOString() },
+      radiusMeters: explicitRadius,
+      limit: 200,
+      includePluginResults: true,
+    });
+
+    console.log(`Total Alerts: ${response2.meta.totalCount}`);
+    console.log(`Radius in meta: ${response2.meta.radiusMeters}m`);
+    console.log(`Truncated: ${response2.meta.truncated}`);
+
+    if (response2.pluginResults) {
+      console.log('\nPlugin Results:');
+      for (const pr of response2.pluginResults) {
+        if (pr.skipped) {
+          console.log(`  [SKIPPED] ${pr.pluginName}: ${pr.skipReason}`);
+        } else {
+          const status = pr.success ? 'SUCCESS' : 'FAILED';
+          console.log(`  [${status}] ${pr.pluginName}: ${pr.alertCount} alerts in ${pr.durationMs}ms`);
+        }
+      }
+    }
+
+    console.log(`\nPlugin defaults: ${response.meta.totalCount} alerts vs explicit 10km: ${response2.meta.totalCount} alerts`);
   }
 
   await feed.dispose();

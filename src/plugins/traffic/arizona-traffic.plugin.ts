@@ -131,6 +131,7 @@ export class ArizonaTrafficPlugin extends BasePlugin {
     supportedTemporalTypes: ['real-time', 'scheduled'],
     supportedCategories: ['traffic'],
     refreshIntervalMs: 5 * 60 * 1000, // 5 minutes
+    defaultRadiusMeters: 10_000,
   };
 
   private trafficConfig: ArizonaTrafficPluginConfig;

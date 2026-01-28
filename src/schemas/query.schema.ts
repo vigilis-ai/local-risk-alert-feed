@@ -5,7 +5,7 @@ import {
   AlertCategorySchema,
   AlertTemporalTypeSchema,
 } from './alert.schema';
-import { DEFAULT_QUERY_LIMIT, DEFAULT_QUERY_RADIUS_METERS, MAX_QUERY_LIMIT } from '../types';
+import { DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT } from '../types';
 
 /**
  * Schema for time range presets.
@@ -38,7 +38,7 @@ export const TimeRangeInputSchema = z.union([TimeRangePresetSchema, TimeRangeSch
  */
 export const AlertQuerySchema = z.object({
   location: GeoPointSchema,
-  radiusMeters: z.number().positive().max(100000).default(DEFAULT_QUERY_RADIUS_METERS),
+  radiusMeters: z.number().positive().max(100000).optional(),
   timeRange: TimeRangeInputSchema.optional(),
   limit: z.number().int().positive().max(MAX_QUERY_LIMIT).default(DEFAULT_QUERY_LIMIT),
   minRiskLevel: RiskLevelSchema.optional(),
@@ -78,7 +78,7 @@ export function transformRequestToQuery(
       latitude: data.latitude,
       longitude: data.longitude,
     },
-    radiusMeters: data.radiusMeters ?? DEFAULT_QUERY_RADIUS_METERS,
+    radiusMeters: data.radiusMeters,
     timeRange: data.timeRange,
     limit: data.limit ?? DEFAULT_QUERY_LIMIT,
     minRiskLevel: data.minRiskLevel,

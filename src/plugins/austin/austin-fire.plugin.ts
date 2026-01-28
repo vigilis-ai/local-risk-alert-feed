@@ -113,6 +113,7 @@ export class AustinFirePlugin extends BasePlugin {
     supportedTemporalTypes: ['real-time'],
     supportedCategories: ['fire'],
     refreshIntervalMs: 5 * 60 * 1000, // 5 minutes
+    defaultRadiusMeters: 10_000,
   };
 
   private fireConfig: AustinFirePluginConfig;

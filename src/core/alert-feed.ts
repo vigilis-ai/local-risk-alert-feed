@@ -95,7 +95,8 @@ export class AlertFeed {
    */
   async query(query: AlertQuery): Promise<AlertQueryResponse> {
     // Normalize query parameters
-    const radiusMeters = query.radiusMeters ?? DEFAULT_QUERY_RADIUS_METERS;
+    // Preserve undefined so we can detect caller-provided vs plugin-default radius
+    const callerRadius = query.radiusMeters;
     const limit = query.limit ?? DEFAULT_QUERY_LIMIT;
     const timeRange = normalizeTimeRange(query.timeRange);
 
@@ -124,26 +125,28 @@ export class AlertFeed {
       skipReason: reason,
     }));
 
-    // Fetch from temporally compatible plugins
+    // Fetch from temporally compatible plugins (each uses its own default radius if callerRadius is undefined)
     const { alertSets, pluginResults } = await this.fetchFromPlugins(
       temporallyCompatible,
       {
         location: query.location,
-        radiusMeters,
         timeRange,
         limit,
         categories: query.categories,
         temporalTypes: query.temporalTypes,
       },
+      callerRadius,
       query.includePluginResults ?? false
     );
 
     // Aggregate alerts
+    // When callerRadius is undefined, skip the secondary radius filter —
+    // each plugin already filtered by its own default radius.
     const aggregatedAlerts = this.aggregator.aggregate(alertSets, {
       minRiskLevel: query.minRiskLevel,
       timeRange,
       location: query.location,
-      radiusMeters,
+      radiusMeters: callerRadius,
       limit,
     });
 
@@ -157,7 +160,7 @@ export class AlertFeed {
         queriedAt: new Date().toISOString(),
         timeRange,
         location: query.location,
-        radiusMeters,
+        radiusMeters: callerRadius,
         truncated,
       },
     };
@@ -172,10 +175,13 @@ export class AlertFeed {
 
   /**
    * Fetch alerts from multiple plugins with concurrency control.
+   * When callerRadius is undefined, each plugin uses its own defaultRadiusMeters
+   * (falling back to the framework DEFAULT_QUERY_RADIUS_METERS).
    */
   private async fetchFromPlugins(
     plugins: ReturnType<typeof this.registry.getAll>,
-    options: PluginFetchOptions,
+    baseOptions: Omit<PluginFetchOptions, 'radiusMeters'>,
+    callerRadius: number | undefined,
     includeResults: boolean
   ): Promise<{
     alertSets: Alert[][];
@@ -189,7 +195,11 @@ export class AlertFeed {
 
     for (const chunk of chunks) {
       const chunkResults = await Promise.all(
-        chunk.map((plugin) => this.fetchFromPlugin(plugin, options))
+        chunk.map((plugin) => {
+          const radiusMeters =
+            callerRadius ?? plugin.metadata.defaultRadiusMeters ?? DEFAULT_QUERY_RADIUS_METERS;
+          return this.fetchFromPlugin(plugin, { ...baseOptions, radiusMeters });
+        })
       );
 
       for (const result of chunkResults) {
