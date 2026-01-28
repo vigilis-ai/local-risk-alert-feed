@@ -9,6 +9,7 @@ import { NWSWeatherPlugin } from '../src/plugins/weather';
 import { PhoenixFirePlugin, NIFCWildfirePlugin } from '../src/plugins/fire-emt';
 import { PhoenixEventsPlugin, PhoenixConventionCenterPlugin } from '../src/plugins/events';
 import { ArizonaTrafficPlugin } from '../src/plugins/traffic';
+import { BendPolicePlugin } from '../src/plugins/police';
 
 interface LocationTest {
   name: string;
@@ -53,6 +54,7 @@ async function runTest(location: LocationTest, radiusMeters: number = 2000) {
     }) },
     { plugin: new PhoenixConventionCenterPlugin() },
     { plugin: new ArizonaTrafficPlugin() },
+    { plugin: new BendPolicePlugin() },
   ]);
 
   log('-'.repeat(80));

@@ -21,3 +21,7 @@ export type { ArizonaTrafficPluginConfig } from './traffic';
 // Air quality plugins
 export { AirNowPlugin } from './air-quality';
 export type { AirNowPluginConfig } from './air-quality';
+
+// Police plugins
+export { BendPolicePlugin } from './police';
+export type { BendPolicePluginConfig } from './police';
