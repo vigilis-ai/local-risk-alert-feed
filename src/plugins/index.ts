@@ -34,3 +34,11 @@ export type {
   AustinCrimePluginConfig,
   AustinEventsPluginConfig,
 } from './austin';
+
+// Seattle plugins
+export { SeattlePolicePlugin, SeattleFirePlugin, SeattleEMTPlugin } from './seattle';
+export type {
+  SeattlePolicePluginConfig,
+  SeattleFirePluginConfig,
+  SeattleEMTPluginConfig,
+} from './seattle';

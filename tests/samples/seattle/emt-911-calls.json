@@ -1,0 +1,302 @@
+[
+    {
+        "address": "1703 California Ave Sw",
+        "type": "Medic Response",
+        "datetime": "2026-01-28T13:49:00.000",
+        "latitude": "47.588027",
+        "longitude": "-122.386277",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.386277,
+                47.588027
+            ]
+        },
+        "incident_number": "F260013127"
+    },
+    {
+        "address": "1448 Nw Market St",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T13:46:00.000",
+        "latitude": "47.668666",
+        "longitude": "-122.374848",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.374848,
+                47.668666
+            ]
+        },
+        "incident_number": "F260013126"
+    },
+    {
+        "address": "85 Pike St",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T13:46:00.000",
+        "latitude": "47.608584",
+        "longitude": "-122.340581",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.340581,
+                47.608584
+            ]
+        },
+        "incident_number": "F260013125"
+    },
+    {
+        "address": "4113 Linden Ave N",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T13:45:00.000",
+        "latitude": "47.656793",
+        "longitude": "-122.348558",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.348558,
+                47.656793
+            ]
+        },
+        "incident_number": "F260013123"
+    },
+    {
+        "address": "7530 34th Ave Nw",
+        "type": "Aid Response Yellow",
+        "datetime": "2026-01-28T13:45:00.000",
+        "latitude": "47.683389",
+        "longitude": "-122.400413",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.400413,
+                47.683389
+            ]
+        },
+        "incident_number": "F260013124"
+    },
+    {
+        "address": "223 Yesler Way",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T13:32:00.000",
+        "latitude": "47.601718",
+        "longitude": "-122.331581",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.331581,
+                47.601718
+            ]
+        },
+        "incident_number": "F260013120"
+    },
+    {
+        "address": "325 9th Ave",
+        "type": "Medic Response",
+        "datetime": "2026-01-28T13:22:00.000",
+        "latitude": "47.603586",
+        "longitude": "-122.322948",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.322948,
+                47.603586
+            ]
+        },
+        "incident_number": "F260013113"
+    },
+    {
+        "address": "362 Denny Way",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T13:14:00.000",
+        "latitude": "47.618578",
+        "longitude": "-122.349485",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.349485,
+                47.618578
+            ]
+        },
+        "incident_number": "F260013111"
+    },
+    {
+        "address": "35th Ave Sw / W Seattle Stadium Ac Rd",
+        "type": "MVI - Motor Vehicle Incident",
+        "datetime": "2026-01-28T13:06:00.000",
+        "latitude": "47.562035",
+        "longitude": "-122.376202",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.376202,
+                47.562035
+            ]
+        },
+        "incident_number": "F260013106"
+    },
+    {
+        "address": "4016 W Prosper St",
+        "type": "Aid Response Yellow",
+        "datetime": "2026-01-28T13:05:00.000",
+        "latitude": "47.649503",
+        "longitude": "-122.408049",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.408049,
+                47.649503
+            ]
+        },
+        "incident_number": "F260013104"
+    },
+    {
+        "address": "2614 4th Ave",
+        "type": "Aid Response Yellow",
+        "datetime": "2026-01-28T13:03:00.000",
+        "latitude": "47.617316",
+        "longitude": "-122.347229",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.347229,
+                47.617316
+            ]
+        },
+        "incident_number": "F260013102"
+    },
+    {
+        "address": "223 Yesler Way",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T13:00:00.000",
+        "latitude": "47.601718",
+        "longitude": "-122.331581",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.331581,
+                47.601718
+            ]
+        },
+        "incident_number": "F260013099"
+    },
+    {
+        "address": "121 15th Ave E",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T12:58:00.000",
+        "latitude": "47.618838",
+        "longitude": "-122.312736",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.312736,
+                47.618838
+            ]
+        },
+        "incident_number": "F260013098"
+    },
+    {
+        "address": "2202 E Olive St",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T12:57:00.000",
+        "latitude": "47.61711",
+        "longitude": "-122.303597",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.303597,
+                47.61711
+            ]
+        },
+        "incident_number": "F260013096"
+    },
+    {
+        "address": "1717 Belmont Ave",
+        "type": "Automatic Medical Alarm",
+        "datetime": "2026-01-28T12:51:00.000",
+        "latitude": "47.616576",
+        "longitude": "-122.32449",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.32449,
+                47.616576
+            ]
+        },
+        "incident_number": "F260013095"
+    },
+    {
+        "address": "3920 Stone Way N",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T12:44:00.000",
+        "latitude": "47.654346",
+        "longitude": "-122.34249",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.34249,
+                47.654346
+            ]
+        },
+        "incident_number": "F260013094"
+    },
+    {
+        "address": "2600 Sw Barton St",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T12:40:00.000",
+        "latitude": "47.521022",
+        "longitude": "-122.365894",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.365894,
+                47.521022
+            ]
+        },
+        "incident_number": "F260013093"
+    },
+    {
+        "address": "6020 35th Ave Sw",
+        "type": "Aid Response Yellow",
+        "datetime": "2026-01-28T12:38:00.000",
+        "latitude": "47.548231",
+        "longitude": "-122.376372",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.376372,
+                47.548231
+            ]
+        },
+        "incident_number": "F260013092"
+    },
+    {
+        "address": "4754 42nd Ave Sw",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T12:26:00.000",
+        "latitude": "47.560119",
+        "longitude": "-122.385486",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.385486,
+                47.560119
+            ]
+        },
+        "incident_number": "F260013085"
+    },
+    {
+        "address": "3112 Sw Avalon Way",
+        "type": "Aid Response",
+        "datetime": "2026-01-28T12:26:00.000",
+        "latitude": "47.565953",
+        "longitude": "-122.371785",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.371785,
+                47.565953
+            ]
+        },
+        "incident_number": "F260013084"
+    }
+]

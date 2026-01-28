@@ -1,0 +1,302 @@
+[
+    {
+        "address": "Broadway E / E Republican St",
+        "type": "Low Acuity Response",
+        "datetime": "2026-01-28T13:45:00.000",
+        "latitude": "47.623129",
+        "longitude": "-122.320924",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.320924,
+                47.623129
+            ]
+        },
+        "incident_number": "F260013122"
+    },
+    {
+        "address": "14115 Aurora Ave N",
+        "type": "Auto Alarm 1 + 1 + 1",
+        "datetime": "2026-01-28T13:26:00.000",
+        "latitude": "47.731129",
+        "longitude": "-122.345064",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.345064,
+                47.731129
+            ]
+        },
+        "incident_number": "F260013117"
+    },
+    {
+        "address": "223 Yesler Way",
+        "type": "Illegal Burn",
+        "datetime": "2026-01-28T13:24:00.000",
+        "latitude": "47.601718",
+        "longitude": "-122.331581",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.331581,
+                47.601718
+            ]
+        },
+        "incident_number": "F260013116"
+    },
+    {
+        "address": "11015 Alton Ave Ne",
+        "type": "Investigate Out Of Service",
+        "datetime": "2026-01-28T13:14:00.000",
+        "latitude": "47.708443",
+        "longitude": "-122.282731",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.282731,
+                47.708443
+            ]
+        },
+        "incident_number": "F260013110"
+    },
+    {
+        "address": "7930 Rainier Ave S",
+        "type": "Ladder Code Red",
+        "datetime": "2026-01-28T13:02:00.000",
+        "latitude": "47.530717",
+        "longitude": "-122.269989",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.269989,
+                47.530717
+            ]
+        },
+        "incident_number": "F260013101"
+    },
+    {
+        "address": "105 5th Ave S",
+        "type": "Marine Fire On Shore",
+        "datetime": "2026-01-28T12:32:00.000",
+        "latitude": "47.601643",
+        "longitude": "-122.327656",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.327656,
+                47.601643
+            ]
+        },
+        "incident_number": "F260013088"
+    },
+    {
+        "address": "SB I5 AT ALBRO",
+        "type": "Fire Response Freeway",
+        "datetime": "2026-01-28T12:11:00.000",
+        "latitude": "47.551689",
+        "longitude": "-122.317047",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.317047,
+                47.551689
+            ]
+        },
+        "incident_number": "F260013076"
+    },
+    {
+        "address": "Beacon Ave S / S Columbian Way",
+        "type": "Rescue Extrication",
+        "datetime": "2026-01-28T12:10:00.000",
+        "latitude": "47.559608",
+        "longitude": "-122.304656",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.304656,
+                47.559608
+            ]
+        },
+        "incident_number": "F260013074"
+    },
+    {
+        "address": "103 12th Ave",
+        "type": "Auto Fire Alarm",
+        "datetime": "2026-01-28T11:57:00.000",
+        "latitude": "47.601733",
+        "longitude": "-122.316784",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.316784,
+                47.601733
+            ]
+        },
+        "incident_number": "F260013068"
+    },
+    {
+        "address": "11030 5th Ave Ne",
+        "type": "Auto Fire Alarm",
+        "datetime": "2026-01-28T11:54:00.000",
+        "latitude": "47.709488",
+        "longitude": "-122.323301",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.323301,
+                47.709488
+            ]
+        },
+        "incident_number": "F260013065"
+    },
+    {
+        "address": "1511 E Pike St",
+        "type": "Auto Fire Alarm",
+        "datetime": "2026-01-28T11:50:00.000",
+        "latitude": "47.614113",
+        "longitude": "-122.312626",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.312626,
+                47.614113
+            ]
+        },
+        "incident_number": "F260013062"
+    },
+    {
+        "address": "9TH AVE / JEFFERSON ST",
+        "type": "Alarm Bell",
+        "datetime": "2026-01-28T11:47:00.000",
+        "latitude": "47.604841",
+        "longitude": "-122.324097",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.324097,
+                47.604841
+            ]
+        },
+        "incident_number": "F260013059"
+    },
+    {
+        "address": "515 3rd Ave",
+        "type": "Low Acuity Response",
+        "datetime": "2026-01-28T09:43:00.000",
+        "latitude": "47.602158",
+        "longitude": "-122.330849",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.330849,
+                47.602158
+            ]
+        },
+        "incident_number": "F260013014"
+    },
+    {
+        "address": "1737 45th Ave Sw",
+        "type": "2RED - 1 + 1",
+        "datetime": "2026-01-28T09:38:00.000",
+        "latitude": "47.58785",
+        "longitude": "-122.388998",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.388998,
+                47.58785
+            ]
+        },
+        "incident_number": "F260013008"
+    },
+    {
+        "address": "401 9th Ave N",
+        "type": "Automatic Fire Alarm False",
+        "datetime": "2026-01-28T09:22:00.000",
+        "latitude": "47.622046",
+        "longitude": "-122.33976",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.33976,
+                47.622046
+            ]
+        },
+        "incident_number": "F260013003"
+    },
+    {
+        "address": "S Lucile St / Airport Way S",
+        "type": "Illegal Burn",
+        "datetime": "2026-01-28T09:22:00.000",
+        "latitude": "47.553351",
+        "longitude": "-122.321004",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.321004,
+                47.553351
+            ]
+        },
+        "incident_number": "F260013002"
+    },
+    {
+        "address": "801 Alaskan Way",
+        "type": "Low Acuity Response",
+        "datetime": "2026-01-28T09:04:00.000",
+        "latitude": "47.602422",
+        "longitude": "-122.33696",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.33696,
+                47.602422
+            ]
+        },
+        "incident_number": "F260012999"
+    },
+    {
+        "address": "4069 Spokane Ln Ne",
+        "type": "Auto Fire Alarm",
+        "datetime": "2026-01-28T08:48:00.000",
+        "latitude": "47.656288",
+        "longitude": "-122.308075",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.308075,
+                47.656288
+            ]
+        },
+        "incident_number": "F260012993"
+    },
+    {
+        "address": "7 S Idaho St",
+        "type": "Rubbish Fire",
+        "datetime": "2026-01-28T08:47:00.000",
+        "latitude": "47.5645",
+        "longitude": "-122.343395",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.343395,
+                47.5645
+            ]
+        },
+        "incident_number": "F260012992"
+    },
+    {
+        "address": "1201 Mercer St",
+        "type": "Rescue Elevator",
+        "datetime": "2026-01-28T08:15:00.000",
+        "latitude": "47.624269",
+        "longitude": "-122.33298",
+        "report_location": {
+            "type": "Point",
+            "coordinates": [
+                -122.33298,
+                47.624269
+            ]
+        },
+        "incident_number": "F260012982"
+    }
+]

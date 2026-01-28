@@ -1,6 +1,6 @@
 {
   "name": "local-risk-alert-feed",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "TypeScript library for aggregating local risk alerts from multiple data sources via a plugin system",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -55,6 +55,11 @@
       "import": "./dist/esm/plugins/austin/index.js",
       "require": "./dist/cjs/plugins/austin/index.js",
       "types": "./dist/types/plugins/austin/index.d.ts"
+    },
+    "./plugins/seattle": {
+      "import": "./dist/esm/plugins/seattle/index.js",
+      "require": "./dist/cjs/plugins/seattle/index.js",
+      "types": "./dist/types/plugins/seattle/index.d.ts"
     }
   },
   "files": [

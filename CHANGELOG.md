@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-01-28
+
+### Added
+- **Seattle Plugins** - Three new plugins for Seattle, Washington coverage:
+  - `SeattlePolicePlugin` - Police calls for service from SPD Call Data (updated ~hourly, dispatch coordinates blurred to hundred-block level with beat centroid fallback)
+  - `SeattleFirePlugin` - Real-time fire dispatch from Seattle Fire 911 Calls (5-minute updates, filtered to fire/hazmat/rescue types)
+  - `SeattleEMTPlugin` - Real-time medical/EMS dispatch from Seattle Fire 911 Calls (5-minute updates, filtered to aid/medic/medical types)
+- SPD-specific call type abbreviation mappings (ASLT, BURG, ROBB, etc.)
+- **Package Exports** - Added `./plugins/seattle` export path
+- Seattle test script (`scripts/test-seattle.ts`) for Pike Place Market integration testing
+- Raw API sample data in `tests/samples/seattle/`
+
+### Fixed
+- Socrata API date queries now strip timezone `Z` suffix to match floating timestamp format
+
 ## [0.4.0] - 2026-01-28
 
 ### Added
