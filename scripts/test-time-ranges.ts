@@ -1,5 +1,5 @@
 /**
- * Test Bend Police plugin with various time ranges.
+ * Test temporal filtering with various time ranges.
  *
  * Run with: npx tsx scripts/test-time-ranges.ts
  */
@@ -8,6 +8,7 @@ import { AlertFeed } from '../src';
 import { NWSWeatherPlugin } from '../src/plugins/weather';
 import { NIFCWildfirePlugin } from '../src/plugins/fire-emt';
 import { BendPolicePlugin } from '../src/plugins/police';
+import { PhoenixEventsPlugin } from '../src/plugins/events';
 
 async function test() {
   const feed = new AlertFeed({
@@ -19,14 +20,37 @@ async function test() {
     { plugin: new NWSWeatherPlugin() },
     { plugin: new NIFCWildfirePlugin() },
     { plugin: new BendPolicePlugin() },
+    { plugin: new PhoenixEventsPlugin() }, // Future-only plugin for comparison
   ]);
 
   const location = { latitude: 44.0582, longitude: -121.3153 };
   const radiusMeters = 25000;
 
-  // Test 1: Default time range (next-24h) - should show future scheduled events
+  // Show plugin temporal characteristics
   console.log('='.repeat(70));
+  console.log('PLUGIN TEMPORAL CHARACTERISTICS');
+  console.log('='.repeat(70));
+
+  const plugins = feed.getPluginMetadata();
+  for (const p of plugins) {
+    console.log('\n' + p.name + ' (' + p.id + ')');
+    console.log('  Supports Past: ' + p.temporal.supportsPast);
+    console.log('  Supports Future: ' + p.temporal.supportsFuture);
+    if (p.temporal.dataLagMinutes !== undefined) {
+      const hours = Math.round(p.temporal.dataLagMinutes / 60);
+      console.log('  Data Lag: ~' + hours + ' hours');
+    }
+    if (p.temporal.futureLookaheadMinutes !== undefined) {
+      const days = Math.round(p.temporal.futureLookaheadMinutes / 1440);
+      console.log('  Future Lookahead: ' + days + ' days');
+    }
+    console.log('  Description: ' + p.temporal.freshnessDescription);
+  }
+
+  // Test 1: Default time range (next-24h) - future only
+  console.log('\n' + '='.repeat(70));
   console.log('TEST 1: Default time range (next-24h - future only)');
+  console.log('Expected: Future-supporting plugins only, past-only plugins SKIPPED');
   console.log('='.repeat(70));
 
   const defaultResult = await feed.query({
@@ -37,16 +61,21 @@ async function test() {
 
   console.log('Time range: ' + defaultResult.meta.timeRange.start + ' to ' + defaultResult.meta.timeRange.end);
   console.log('Total alerts: ' + defaultResult.meta.totalCount);
+  console.log('\nPlugin Results:');
   if (defaultResult.pluginResults) {
     for (const pr of defaultResult.pluginResults) {
-      console.log('  ' + pr.pluginName + ': ' + pr.alertCount + ' alerts');
+      if (pr.skipped) {
+        console.log('  [SKIPPED] ' + pr.pluginName + ': ' + pr.skipReason);
+      } else {
+        console.log('  [RAN] ' + pr.pluginName + ': ' + pr.alertCount + ' alerts');
+      }
     }
   }
-  console.log();
 
-  // Test 2: past-24h only - should show recent police activity
-  console.log('='.repeat(70));
+  // Test 2: past-24h only
+  console.log('\n' + '='.repeat(70));
   console.log('TEST 2: past-24h time range (historical only)');
+  console.log('Expected: Delayed plugins SKIPPED (data not yet available)');
   console.log('='.repeat(70));
 
   const past24hResult = await feed.query({
@@ -58,63 +87,54 @@ async function test() {
 
   console.log('Time range: ' + past24hResult.meta.timeRange.start + ' to ' + past24hResult.meta.timeRange.end);
   console.log('Total alerts: ' + past24hResult.meta.totalCount);
+  console.log('\nPlugin Results:');
   if (past24hResult.pluginResults) {
     for (const pr of past24hResult.pluginResults) {
-      console.log('  ' + pr.pluginName + ': ' + pr.alertCount + ' alerts');
+      if (pr.skipped) {
+        console.log('  [SKIPPED] ' + pr.pluginName + ': ' + pr.skipReason);
+      } else {
+        console.log('  [RAN] ' + pr.pluginName + ': ' + pr.alertCount + ' alerts');
+      }
     }
   }
-  console.log();
 
-  // Test 3: Custom range -24h to +24h (typical use case)
+  // Test 3: past-7d time range
+  console.log('\n' + '='.repeat(70));
+  console.log('TEST 3: past-7d time range');
+  console.log('Expected: All past-supporting plugins run (data lag is within range)');
   console.log('='.repeat(70));
-  console.log('TEST 3: Custom range -24h to +24h (typical real-world use)');
-  console.log('='.repeat(70));
 
-  const now = new Date();
-  const start24h = new Date(now.getTime() - 24 * 60 * 60 * 1000); // -24h
-  const end24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);   // +24h
-
-  const combinedResult = await feed.query({
+  const past7dResult = await feed.query({
     location,
     radiusMeters,
-    timeRange: {
-      start: start24h.toISOString(),
-      end: end24h.toISOString(),
-    },
+    timeRange: 'past-7d',
     includePluginResults: true,
   });
 
-  console.log('Time range: ' + combinedResult.meta.timeRange.start + ' to ' + combinedResult.meta.timeRange.end);
-  console.log('Total alerts: ' + combinedResult.meta.totalCount);
-  if (combinedResult.pluginResults) {
-    for (const pr of combinedResult.pluginResults) {
-      console.log('  ' + pr.pluginName + ': ' + pr.alertCount + ' alerts');
+  console.log('Time range: ' + past7dResult.meta.timeRange.start + ' to ' + past7dResult.meta.timeRange.end);
+  console.log('Total alerts: ' + past7dResult.meta.totalCount);
+  console.log('\nPlugin Results:');
+  if (past7dResult.pluginResults) {
+    for (const pr of past7dResult.pluginResults) {
+      if (pr.skipped) {
+        console.log('  [SKIPPED] ' + pr.pluginName + ': ' + pr.skipReason);
+      } else {
+        console.log('  [RAN] ' + pr.pluginName + ': ' + pr.alertCount + ' alerts');
+      }
     }
   }
 
-  // Show sample alerts
-  if (combinedResult.alerts.length > 0) {
-    console.log('\nSample alerts from combined range:');
-    for (const alert of combinedResult.alerts.slice(0, 5)) {
-      const risk = alert.riskLevel.toUpperCase();
-      console.log('  [' + risk + '] ' + alert.title);
-      console.log('    Source: ' + alert.source.name);
-      console.log('    Time: ' + (alert.timestamps.eventStart || alert.timestamps.issued));
-      console.log('    Category: ' + alert.category);
-      console.log();
-    }
-  }
-  console.log();
-
-  // Test 4: Custom range -7d to +1d
-  console.log('='.repeat(70));
-  console.log('TEST 4: Custom range -7d to +1d');
+  // Test 4: Custom range -7d to +1d (typical real-world query)
+  console.log('\n' + '='.repeat(70));
+  console.log('TEST 4: Custom range -7d to +1d (typical real-world query)');
+  console.log('Expected: All plugins run (spans both past and future)');
   console.log('='.repeat(70));
 
-  const start7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // -7d
-  const end1d = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);   // +1d
+  const now = new Date();
+  const start7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const end1d = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
 
-  const weekResult = await feed.query({
+  const combinedResult = await feed.query({
     location,
     radiusMeters,
     timeRange: {
@@ -124,92 +144,42 @@ async function test() {
     includePluginResults: true,
   });
 
-  console.log('Time range: ' + weekResult.meta.timeRange.start + ' to ' + weekResult.meta.timeRange.end);
-  console.log('Total alerts: ' + weekResult.meta.totalCount);
-  if (weekResult.pluginResults) {
-    for (const pr of weekResult.pluginResults) {
-      console.log('  ' + pr.pluginName + ': ' + pr.alertCount + ' alerts');
+  console.log('Time range: ' + combinedResult.meta.timeRange.start + ' to ' + combinedResult.meta.timeRange.end);
+  console.log('Total alerts: ' + combinedResult.meta.totalCount);
+  console.log('\nPlugin Results:');
+  if (combinedResult.pluginResults) {
+    for (const pr of combinedResult.pluginResults) {
+      if (pr.skipped) {
+        console.log('  [SKIPPED] ' + pr.pluginName + ': ' + pr.skipReason);
+      } else {
+        console.log('  [RAN] ' + pr.pluginName + ': ' + pr.alertCount + ' alerts');
+      }
     }
   }
 
-  // Breakdown by category
-  const byCategory: Record<string, number> = {};
-  for (const a of weekResult.alerts) {
-    byCategory[a.category] = (byCategory[a.category] || 0) + 1;
-  }
-
-  console.log('\nBy category:');
-  const sortedCategories = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
-  for (const [cat, count] of sortedCategories) {
-    console.log('  ' + cat + ': ' + count);
-  }
-
-  // Breakdown by risk level
-  const byRisk: Record<string, number> = {};
-  for (const a of weekResult.alerts) {
-    byRisk[a.riskLevel] = (byRisk[a.riskLevel] || 0) + 1;
-  }
-
-  console.log('\nBy risk level:');
-  const riskOrder = ['extreme', 'severe', 'high', 'moderate', 'low'];
-  for (const risk of riskOrder) {
-    if (byRisk[risk]) {
-      console.log('  ' + risk.toUpperCase() + ': ' + byRisk[risk]);
-    }
-  }
-
-  // Test 5: Query for specific day when data exists (Jan 26)
+  // Test 5: next-7d (future only)
   console.log('\n' + '='.repeat(70));
-  console.log('TEST 5: Query for Jan 26 only (verify filtering works)');
+  console.log('TEST 5: next-7d time range (future only)');
+  console.log('Expected: Past-only plugins SKIPPED');
   console.log('='.repeat(70));
 
-  const jan26Result = await feed.query({
+  const next7dResult = await feed.query({
     location,
     radiusMeters,
-    timeRange: {
-      start: '2026-01-26T00:00:00Z',
-      end: '2026-01-26T23:59:59Z',
-    },
+    timeRange: 'next-7d',
     includePluginResults: true,
   });
 
-  console.log('Time range: ' + jan26Result.meta.timeRange.start + ' to ' + jan26Result.meta.timeRange.end);
-  console.log('Total alerts: ' + jan26Result.meta.totalCount);
-  if (jan26Result.pluginResults) {
-    for (const pr of jan26Result.pluginResults) {
-      console.log('  ' + pr.pluginName + ': ' + pr.alertCount + ' alerts');
-    }
-  }
-
-  if (jan26Result.alerts.length > 0) {
-    console.log('\nFirst 3 alerts from Jan 26:');
-    for (const a of jan26Result.alerts.slice(0, 3)) {
-      const risk = a.riskLevel.toUpperCase();
-      console.log('  [' + risk + '] ' + a.title);
-      console.log('    Time: ' + a.timestamps.eventStart);
-    }
-  }
-
-  // Test 6: Query for Jan 27 (should have fewer/no results due to data lag)
-  console.log('\n' + '='.repeat(70));
-  console.log('TEST 6: Query for Jan 27 only (recent - may have data lag)');
-  console.log('='.repeat(70));
-
-  const jan27Result = await feed.query({
-    location,
-    radiusMeters,
-    timeRange: {
-      start: '2026-01-27T00:00:00Z',
-      end: '2026-01-27T23:59:59Z',
-    },
-    includePluginResults: true,
-  });
-
-  console.log('Time range: ' + jan27Result.meta.timeRange.start + ' to ' + jan27Result.meta.timeRange.end);
-  console.log('Total alerts: ' + jan27Result.meta.totalCount);
-  if (jan27Result.pluginResults) {
-    for (const pr of jan27Result.pluginResults) {
-      console.log('  ' + pr.pluginName + ': ' + pr.alertCount + ' alerts');
+  console.log('Time range: ' + next7dResult.meta.timeRange.start + ' to ' + next7dResult.meta.timeRange.end);
+  console.log('Total alerts: ' + next7dResult.meta.totalCount);
+  console.log('\nPlugin Results:');
+  if (next7dResult.pluginResults) {
+    for (const pr of next7dResult.pluginResults) {
+      if (pr.skipped) {
+        console.log('  [SKIPPED] ' + pr.pluginName + ': ' + pr.skipReason);
+      } else {
+        console.log('  [RAN] ' + pr.pluginName + ': ' + pr.alertCount + ' alerts');
+      }
     }
   }
 
@@ -217,8 +187,6 @@ async function test() {
   console.log('\n' + '='.repeat(70));
   console.log('All tests complete!');
   console.log('='.repeat(70));
-  console.log('\nNOTE: Bend Police data has ~24-48 hour delay from real-time.');
-  console.log('The most recent data available is from Jan 26, 2026.');
 }
 
 test().catch(console.error);

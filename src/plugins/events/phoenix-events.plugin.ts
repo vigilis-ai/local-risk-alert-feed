@@ -108,6 +108,12 @@ export class PhoenixEventsPlugin extends BasePlugin {
       radiusMeters: COVERAGE_RADIUS_METERS,
       description: 'Downtown Phoenix area',
     },
+    temporal: {
+      supportsPast: false,
+      supportsFuture: true,
+      futureLookaheadMinutes: 43200, // 30 days
+      freshnessDescription: 'Scheduled events up to 30 days ahead',
+    },
     supportedTemporalTypes: ['scheduled'],
     supportedCategories: ['event'],
     refreshIntervalMs: 30 * 60 * 1000, // 30 minutes

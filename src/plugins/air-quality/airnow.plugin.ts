@@ -101,6 +101,13 @@ export class AirNowPlugin extends BasePlugin {
       type: 'global',
       description: 'United States',
     },
+    temporal: {
+      supportsPast: true,
+      supportsFuture: true,
+      dataLagMinutes: 60, // Hourly updates
+      futureLookaheadMinutes: 2880, // 2 days of forecasts
+      freshnessDescription: 'Hourly observations, 2-day forecasts',
+    },
     supportedTemporalTypes: ['real-time', 'scheduled'],
     supportedCategories: ['weather'], // Air quality is weather-related
     refreshIntervalMs: 60 * 60 * 1000, // 1 hour - AQI updates hourly

@@ -109,9 +109,24 @@ export class AlertFeed {
       temporalTypes: query.temporalTypes,
     });
 
-    // Fetch from all applicable plugins
+    // Filter by temporal compatibility
+    const { compatible: temporallyCompatible, skipped: temporallySkipped } =
+      this.resolver.filterByTemporalCompatibility(applicablePlugins, timeRange);
+
+    // Build skipped plugin results
+    const skippedResults: PluginResultInfo[] = temporallySkipped.map(({ plugin, reason }) => ({
+      pluginId: plugin.metadata.id,
+      pluginName: plugin.metadata.name,
+      success: true, // Not an error, just skipped
+      alertCount: 0,
+      durationMs: 0,
+      skipped: true,
+      skipReason: reason,
+    }));
+
+    // Fetch from temporally compatible plugins
     const { alertSets, pluginResults } = await this.fetchFromPlugins(
-      applicablePlugins,
+      temporallyCompatible,
       {
         location: query.location,
         radiusMeters,
@@ -148,7 +163,8 @@ export class AlertFeed {
     };
 
     if (query.includePluginResults) {
-      response.pluginResults = pluginResults;
+      // Combine fetched and skipped plugin results
+      response.pluginResults = [...pluginResults, ...skippedResults];
     }
 
     return response;

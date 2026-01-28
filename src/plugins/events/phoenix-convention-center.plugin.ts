@@ -92,6 +92,12 @@ export class PhoenixConventionCenterPlugin extends BasePlugin {
       radiusMeters: COVERAGE_RADIUS_METERS,
       description: 'Downtown Phoenix venues (Convention Center, Orpheum, Symphony Hall)',
     },
+    temporal: {
+      supportsPast: false,
+      supportsFuture: true,
+      futureLookaheadMinutes: 129600, // 90 days
+      freshnessDescription: 'Scheduled events up to 90 days ahead',
+    },
     supportedTemporalTypes: ['scheduled'],
     supportedCategories: ['event'],
     refreshIntervalMs: 60 * 60 * 1000, // 1 hour

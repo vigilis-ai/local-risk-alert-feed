@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-01-23
+
+### Added
+- **Bend Police Plugin** (`BendPolicePlugin`) - New plugin for Bend, Oregon police calls for service
+  - Uses Bend Police Department ArcGIS service
+  - Provides real-time and historical police call data
+  - Configurable filtering for low-priority calls
+  - Coverage: Bend, Oregon metropolitan area
+- **Phoenix Convention Center Plugin** (`PhoenixConventionCenterPlugin`) - New plugin for Phoenix Convention Center events
+  - Integrates with Ungerboeck API for convention center events
+  - Includes events from Phoenix Convention Center, Orpheum Theatre, and Symphony Hall
+  - Provides scheduled event alerts for downtown Phoenix area
+  - Configurable venue filtering
+
+### Changed
+- **Package Exports** - Added individual plugin export paths for better tree-shaking
+  - `./plugins/police` - Exports police-related plugins
+  - `./plugins/fire-emt` - Exports fire and EMS plugins
+  - `./plugins/events` - Exports event-related plugins
+  - `./plugins/weather` - Exports weather plugins
+  - `./plugins/traffic` - Exports traffic plugins
+  - `./plugins/air-quality` - Exports air quality plugins
 
 ## [0.2.3] - 2026-01-23
 

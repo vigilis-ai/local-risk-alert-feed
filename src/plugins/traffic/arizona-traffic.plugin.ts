@@ -121,6 +121,13 @@ export class ArizonaTrafficPlugin extends BasePlugin {
       radiusMeters: COVERAGE_RADIUS_METERS,
       description: 'Phoenix metropolitan area and major Arizona highways',
     },
+    temporal: {
+      supportsPast: true,
+      supportsFuture: true,
+      dataLagMinutes: 10, // Near real-time with ~10 minute delay
+      futureLookaheadMinutes: 10080, // 7 days for scheduled construction
+      freshnessDescription: 'Near real-time, scheduled closures up to 7 days ahead',
+    },
     supportedTemporalTypes: ['real-time', 'scheduled'],
     supportedCategories: ['traffic'],
     refreshIntervalMs: 5 * 60 * 1000, // 5 minutes

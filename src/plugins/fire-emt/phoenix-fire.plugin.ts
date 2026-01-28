@@ -98,6 +98,12 @@ export class PhoenixFirePlugin extends BasePlugin {
       radiusMeters: COVERAGE_RADIUS_METERS,
       description: 'Phoenix, AZ metropolitan area (Phoenix, Paradise Valley, Laveen)',
     },
+    temporal: {
+      supportsPast: true,
+      supportsFuture: false,
+      dataLagMinutes: 1440, // ~24 hour delay
+      freshnessDescription: '~24 hour delay',
+    },
     supportedTemporalTypes: ['historical', 'real-time'],
     supportedCategories: ['fire', 'medical'],
     refreshIntervalMs: 5 * 60 * 1000, // 5 minutes

@@ -131,6 +131,12 @@ export class BendPolicePlugin extends BasePlugin {
       radiusMeters: COVERAGE_RADIUS_METERS,
       description: 'Bend, Oregon and surrounding areas',
     },
+    temporal: {
+      supportsPast: true,
+      supportsFuture: false,
+      dataLagMinutes: 2880, // ~48 hour delay
+      freshnessDescription: '1-2 day delay',
+    },
     supportedTemporalTypes: ['historical', 'real-time'],
     supportedCategories: ['crime', 'traffic', 'other'],
     refreshIntervalMs: 5 * 60 * 1000, // 5 minutes

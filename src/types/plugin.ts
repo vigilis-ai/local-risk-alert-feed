@@ -10,6 +10,49 @@ import type { TimeRange } from './query';
 export type PluginCoverageType = 'regional' | 'global';
 
 /**
+ * Describes the temporal characteristics of a plugin's data.
+ * Used to determine if a plugin is relevant for a given time range query.
+ */
+export interface PluginTemporalCharacteristics {
+  /**
+   * Whether the plugin provides data about past events.
+   */
+  supportsPast: boolean;
+
+  /**
+   * Whether the plugin provides data about future/scheduled events.
+   */
+  supportsFuture: boolean;
+
+  /**
+   * Typical data lag in minutes (for past-facing data).
+   * How long after an event occurs before it appears in the data.
+   * - 5 = near real-time
+   * - 60 = hourly updates
+   * - 1440 = 24 hour delay
+   * - 2880 = 48 hour delay
+   *
+   * Undefined if supportsFuture only.
+   */
+  dataLagMinutes?: number;
+
+  /**
+   * How far into the future the plugin can see, in minutes.
+   * - 10080 = 7 days
+   * - 43200 = 30 days
+   *
+   * Undefined if supportsPast only.
+   */
+  futureLookaheadMinutes?: number;
+
+  /**
+   * Human-readable description of data freshness.
+   * e.g., "Near real-time", "1-2 day delay", "Scheduled events up to 30 days"
+   */
+  freshnessDescription: string;
+}
+
+/**
  * Describes the geographic coverage of a plugin.
  */
 export interface PluginCoverage {
@@ -37,6 +80,8 @@ export interface PluginMetadata {
   description: string;
   /** Geographic coverage information */
   coverage: PluginCoverage;
+  /** Temporal characteristics describing data freshness and direction */
+  temporal: PluginTemporalCharacteristics;
   /** Temporal types this plugin can provide */
   supportedTemporalTypes: AlertTemporalType[];
   /** Alert categories this plugin can provide */
@@ -132,4 +177,8 @@ export interface PluginResultInfo {
   fromCache?: boolean;
   /** Any warnings generated */
   warnings?: string[];
+  /** Whether the plugin was skipped due to temporal incompatibility */
+  skipped?: boolean;
+  /** Reason the plugin was skipped */
+  skipReason?: string;
 }

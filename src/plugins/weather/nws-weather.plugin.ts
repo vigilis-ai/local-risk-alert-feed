@@ -78,6 +78,13 @@ export class NWSWeatherPlugin extends BasePlugin {
       type: 'global',
       description: 'United States and territories',
     },
+    temporal: {
+      supportsPast: true,
+      supportsFuture: true,
+      dataLagMinutes: 5,
+      futureLookaheadMinutes: 10080, // 7 days
+      freshnessDescription: 'Near real-time, alerts up to 7 days ahead',
+    },
     supportedTemporalTypes: ['real-time', 'scheduled'],
     supportedCategories: ['weather'],
     refreshIntervalMs: 5 * 60 * 1000, // 5 minutes

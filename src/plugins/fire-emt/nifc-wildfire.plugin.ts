@@ -113,6 +113,12 @@ export class NIFCWildfirePlugin extends BasePlugin {
       radiusMeters: US_COVERAGE_RADIUS_METERS,
       description: 'United States wildfire incidents',
     },
+    temporal: {
+      supportsPast: true,
+      supportsFuture: false,
+      dataLagMinutes: 60, // Hourly updates
+      freshnessDescription: 'Hourly updates',
+    },
     supportedTemporalTypes: ['real-time'],
     supportedCategories: ['fire'],
     refreshIntervalMs: 15 * 60 * 1000, // 15 minutes

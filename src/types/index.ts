@@ -23,6 +23,7 @@ export {
 export type {
   PluginCoverageType,
   PluginCoverage,
+  PluginTemporalCharacteristics,
   PluginMetadata,
   PluginFetchOptions,
   PluginFetchResult,

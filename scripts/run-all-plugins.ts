@@ -66,6 +66,7 @@ async function runTest(location: LocationTest, radiusMeters: number = 2000) {
     log(`  - ${p.name} (${p.id})`);
     log(`    Categories: ${p.supportedCategories.join(', ')}`);
     log(`    Coverage: ${p.coverage.description || p.coverage.type}`);
+    log(`    Temporal: ${p.temporal.freshnessDescription}`);
   }
   log('');
 
@@ -104,15 +105,19 @@ async function runTest(location: LocationTest, radiusMeters: number = 2000) {
 
     if (response.pluginResults) {
       for (const result of response.pluginResults) {
-        const status = result.success ? 'SUCCESS' : 'FAILED';
-        const cache = result.fromCache ? ' (cached)' : '';
-        log(`  [${status}] ${result.pluginName}: ${result.alertCount} alerts in ${result.durationMs}ms${cache}`);
-        if (result.error) {
-          log(`           Error: ${result.error}`);
-        }
-        if (result.warnings?.length) {
-          for (const w of result.warnings) {
-            log(`           Warning: ${w}`);
+        if (result.skipped) {
+          log(`  [SKIPPED] ${result.pluginName}: ${result.skipReason}`);
+        } else {
+          const status = result.success ? 'SUCCESS' : 'FAILED';
+          const cache = result.fromCache ? ' (cached)' : '';
+          log(`  [${status}] ${result.pluginName}: ${result.alertCount} alerts in ${result.durationMs}ms${cache}`);
+          if (result.error) {
+            log(`           Error: ${result.error}`);
+          }
+          if (result.warnings?.length) {
+            for (const w of result.warnings) {
+              log(`           Warning: ${w}`);
+            }
           }
         }
       }
