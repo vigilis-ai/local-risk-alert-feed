@@ -25,3 +25,12 @@ export type { AirNowPluginConfig } from './air-quality';
 // Police plugins
 export { BendPolicePlugin } from './police';
 export type { BendPolicePluginConfig } from './police';
+
+// Austin plugins
+export { AustinTrafficPlugin, AustinFirePlugin, AustinCrimePlugin, AustinEventsPlugin } from './austin';
+export type {
+  AustinTrafficPluginConfig,
+  AustinFirePluginConfig,
+  AustinCrimePluginConfig,
+  AustinEventsPluginConfig,
+} from './austin';

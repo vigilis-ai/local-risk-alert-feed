@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-01-28
+
+### Added
+- **Austin Plugins** - Four new plugins for Austin, Texas coverage:
+  - `AustinTrafficPlugin` - Real-time traffic incidents (5-minute updates)
+  - `AustinFirePlugin` - Real-time fire incidents (5-minute updates)
+  - `AustinCrimePlugin` - APD crime reports (~24 hour delay, uses district centroids for privacy-protected data)
+  - `AustinEventsPlugin` - Convention center events and special event permits with road closures
+- **Plugin Temporal Characteristics** - New `temporal` property on plugin metadata
+  - `supportsPast` / `supportsFuture` - Indicates what time ranges the plugin supports
+  - `dataLagMinutes` - How delayed the data is from real-time
+  - `futureLookaheadMinutes` - How far ahead scheduled data is available
+  - `freshnessDescription` - Human-readable description of data freshness
+- **Temporal Filtering** - Framework now automatically skips plugins that won't return useful data
+  - Plugins are skipped when query time range doesn't match their capabilities
+  - Skipped plugins show in `pluginResults` with `skipped: true` and `skipReason`
+  - Avoids unnecessary API calls for incompatible time ranges
+- **Package Exports** - Added `./plugins/austin` export path
+
+### Changed
+- All existing plugins updated with temporal characteristics metadata
+- `PluginResultInfo` now includes `skipped` and `skipReason` fields
+- Test scripts updated to display temporal info and skipped plugins
+
 ## [0.3.0] - 2026-01-23
 
 ### Added
