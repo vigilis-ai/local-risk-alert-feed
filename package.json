@@ -1,5 +1,5 @@
 {
-  "name": "local-risk-alert-feed",
+  "name": "@vigilis-ai/local-risk-alert-feed",
   "version": "0.5.0",
   "description": "TypeScript library for aggregating local risk alerts from multiple data sources via a plugin system",
   "main": "./dist/cjs/index.js",
@@ -86,8 +86,8 @@
     "events",
     "plugin"
   ],
-  "author": "",
-  "license": "UNLICENSED",
+  "author": "Vigilis AI",
+  "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
   },

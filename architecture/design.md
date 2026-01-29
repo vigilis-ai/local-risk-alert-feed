@@ -17,7 +17,7 @@ The library is composed of three core pieces:
 The library is designed to be plugged into `vigilis-api` or `vigilis-web` as an npm package:
 
 ```typescript
-import { AlertFeed, PhoenixPolicePlugin, NWSWeatherPlugin } from 'local-risk-alert-feed';
+import { AlertFeed, PhoenixPolicePlugin, NWSWeatherPlugin } from '@vigilis-ai/local-risk-alert-feed';
 
 const feed = new AlertFeed({
   plugins: [
@@ -36,7 +36,7 @@ const response = await feed.query({
 
 **Installation:**
 ```bash
-npm install local-risk-alert-feed
+npm install @vigilis-ai/local-risk-alert-feed
 ```
 
 **Exports:**
@@ -189,7 +189,7 @@ All plugins extend `BasePlugin` which provides:
 ### Creating Custom Plugins
 
 ```typescript
-import { BasePlugin, PluginMetadata, PluginFetchOptions, PluginFetchResult } from 'local-risk-alert-feed';
+import { BasePlugin, PluginMetadata, PluginFetchOptions, PluginFetchResult } from '@vigilis-ai/local-risk-alert-feed';
 
 export class MyCustomPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
@@ -361,7 +361,7 @@ const feed = new AlertFeed({
 
 ```typescript
 // api/alerts/route.ts
-import { AlertFeed, PhoenixFirePlugin, NWSWeatherPlugin } from 'local-risk-alert-feed';
+import { AlertFeed, PhoenixFirePlugin, NWSWeatherPlugin } from '@vigilis-ai/local-risk-alert-feed';
 
 const feed = new AlertFeed({
   plugins: [
@@ -389,7 +389,7 @@ export async function GET(request: Request) {
 
 ```typescript
 // hooks/useAlerts.ts
-import { AlertFeed, PhoenixFirePlugin } from 'local-risk-alert-feed';
+import { AlertFeed, PhoenixFirePlugin } from '@vigilis-ai/local-risk-alert-feed';
 
 const feed = new AlertFeed({
   plugins: [{ plugin: new PhoenixFirePlugin() }],

@@ -5,7 +5,7 @@ A TypeScript library for aggregating local risk alerts from multiple data source
 ## Installation
 
 ```bash
-npm install local-risk-alert-feed
+npm install @vigilis-ai/local-risk-alert-feed
 ```
 
 ## Quick Start
@@ -17,7 +17,7 @@ import {
   PhoenixFirePlugin,
   NIFCWildfirePlugin,
   ArizonaTrafficPlugin,
-} from 'local-risk-alert-feed';
+} from '@vigilis-ai/local-risk-alert-feed';
 
 // Create the feed
 const feed = new AlertFeed({
@@ -125,7 +125,7 @@ The library uses a **bring-your-own-client** pattern for caching. No external de
 Zero dependencies, suitable for development or single-instance deployments.
 
 ```typescript
-import { AlertFeed, InMemoryCacheProvider } from 'local-risk-alert-feed';
+import { AlertFeed, InMemoryCacheProvider } from '@vigilis-ai/local-risk-alert-feed';
 
 const feed = new AlertFeed({
   cacheProvider: new InMemoryCacheProvider(),
@@ -138,7 +138,7 @@ Pass your own `@vercel/kv` instance (any version).
 
 ```typescript
 import { kv } from '@vercel/kv';
-import { AlertFeed, VercelKVCacheProvider } from 'local-risk-alert-feed';
+import { AlertFeed, VercelKVCacheProvider } from '@vigilis-ai/local-risk-alert-feed';
 
 const feed = new AlertFeed({
   cacheProvider: new VercelKVCacheProvider(kv, 'my-prefix:'),
@@ -152,7 +152,7 @@ Pass your own AWS SDK DynamoDB Document Client (any v3 version).
 ```typescript
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
-import { AlertFeed, DynamoDBCacheProvider } from 'local-risk-alert-feed';
+import { AlertFeed, DynamoDBCacheProvider } from '@vigilis-ai/local-risk-alert-feed';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
@@ -172,7 +172,7 @@ const feed = new AlertFeed({
 Implement the `CacheProvider` interface for any backend.
 
 ```typescript
-import { CacheProvider, AlertFeed } from 'local-risk-alert-feed';
+import { CacheProvider, AlertFeed } from '@vigilis-ai/local-risk-alert-feed';
 
 const customCache: CacheProvider = {
   async get<T>(key: string): Promise<T | null> {
@@ -265,7 +265,7 @@ interface Alert {
 
 ```typescript
 import { createVercelHandler } from 'local-risk-alert-feed/adapters/vercel';
-import { NWSWeatherPlugin, PhoenixFirePlugin } from 'local-risk-alert-feed';
+import { NWSWeatherPlugin, PhoenixFirePlugin } from '@vigilis-ai/local-risk-alert-feed';
 
 export default createVercelHandler({
   plugins: [
@@ -281,7 +281,7 @@ export default createVercelHandler({
 
 ```typescript
 import { createLambdaHandler } from 'local-risk-alert-feed/adapters/lambda';
-import { NWSWeatherPlugin, PhoenixFirePlugin } from 'local-risk-alert-feed';
+import { NWSWeatherPlugin, PhoenixFirePlugin } from '@vigilis-ai/local-risk-alert-feed';
 
 export const handler = createLambdaHandler({
   plugins: [
@@ -296,7 +296,7 @@ export const handler = createLambdaHandler({
 Extend `BasePlugin` to create your own data source plugins.
 
 ```typescript
-import { BasePlugin, PluginMetadata, PluginFetchOptions, PluginFetchResult } from 'local-risk-alert-feed';
+import { BasePlugin, PluginMetadata, PluginFetchOptions, PluginFetchResult } from '@vigilis-ai/local-risk-alert-feed';
 
 export class MyCustomPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
