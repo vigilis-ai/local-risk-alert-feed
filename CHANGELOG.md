@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-04-16
+
+### Added
+- **Glendale Plugins** - Three new plugins for Glendale, AZ / Tanger Outlets Phoenix coverage:
+  - `GlendaleEventsPlugin` - Events from Ticketmaster for the Glendale Sports & Entertainment District (State Farm Stadium, Desert Diamond Arena, Westgate, Camelback Ranch, Topgolf Glendale). Centered on Tanger Outlets Phoenix at 6800 N 95th Ave. State Farm Stadium events rated `high` risk due to 63,400+ capacity crowd/traffic impact.
+  - `GlendalePolicePlugin` - Police calls for service from Glendale PD public spatial layer (332K+ records, updated daily). Uses ArcGIS org `9fVTQQSiODPjLUTa`, Layer 47 with spatial envelope filtering.
+  - `GlendaleFirePlugin` - Fire and EMS incidents near Glendale from Phoenix Regional Dispatch with spatial bounding-box filtering. Note: Phoenix Fire data only contains city codes PHX/PDV/LAV — Glendale FD calls are not in this dataset, but Phoenix mutual aid responses in the area are captured.
+- **Package Exports** - Added `./plugins/glendale` export path
+- Glendale test script (`scripts/test-glendale.ts`) for Tanger Outlets Phoenix integration testing with all 4 time windows (past 7d, today, tomorrow, next 7d)
+- Known venue coordinates for Glendale entertainment district (Tanger Outlets, State Farm Stadium, Desert Diamond Arena, Westgate, Camelback Ranch, Topgolf)
+
 ## [0.5.0] - 2026-01-28
 
 ### Added

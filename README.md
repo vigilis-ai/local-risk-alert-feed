@@ -58,6 +58,9 @@ await feed.dispose();
 | `PhoenixEventsPlugin` | Phoenix area | event | Real-time |
 | `PhoenixConventionCenterPlugin` | Downtown Phoenix | event | Real-time |
 | `AirNowPlugin` | United States | air-quality | Real-time |
+| `GlendaleEventsPlugin` | Glendale, AZ | event | Scheduled |
+| `GlendalePolicePlugin` | Glendale, AZ | crime, traffic | ~24 hours |
+| `GlendaleFirePlugin` | Glendale, AZ | fire, medical | ~24 hours |
 
 ## Plugin Configuration
 

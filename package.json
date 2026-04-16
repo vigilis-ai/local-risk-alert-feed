@@ -60,6 +60,11 @@
       "import": "./dist/esm/plugins/seattle/index.js",
       "require": "./dist/cjs/plugins/seattle/index.js",
       "types": "./dist/types/plugins/seattle/index.d.ts"
+    },
+    "./plugins/glendale": {
+      "import": "./dist/esm/plugins/glendale/index.js",
+      "require": "./dist/cjs/plugins/glendale/index.js",
+      "types": "./dist/types/plugins/glendale/index.d.ts"
     }
   },
   "files": [

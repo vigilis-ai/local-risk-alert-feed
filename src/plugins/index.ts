@@ -42,3 +42,11 @@ export type {
   SeattleFirePluginConfig,
   SeattleEMTPluginConfig,
 } from './seattle';
+
+// Glendale plugins
+export { GlendaleEventsPlugin, GlendalePolicePlugin, GlendaleFirePlugin } from './glendale';
+export type {
+  GlendaleEventsPluginConfig,
+  GlendalePolicePluginConfig,
+  GlendaleFirePluginConfig,
+} from './glendale';
