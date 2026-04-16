@@ -1,6 +1,6 @@
 {
   "name": "@vigilisai/local-risk-alert-feed",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "TypeScript library for aggregating local risk alerts from multiple data sources via a plugin system",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
