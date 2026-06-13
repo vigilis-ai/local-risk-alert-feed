@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-06-13
+
+### Added
+- **Generic relative time windows** — `resolveTimeRange` now accepts arbitrary `past-{n}{h|d|w}` / `next-{n}{h|d|w}` windows (e.g. `past-48h`, `next-3d`, `past-2w`), not just the named presets. Exposed as a standalone `parseRelativeRange(value, now?)` helper. Spans are clamped to a 366-day maximum (`MAX_RELATIVE_RANGE_MS`).
+
+### Fixed
+- **Unknown time-range no longer crashes downstream queries** — `resolveTimeRangePreset` previously had no `default` branch, so an unrecognized preset returned `undefined` and any downstream read of `.start`/`.end` threw `Cannot read properties of undefined`. It now always returns a valid window. `resolveTimeRange` is hardened end-to-end: unknown strings and malformed explicit ranges fall back to the default window instead of producing `undefined`.
+
 ## [0.6.0] - 2026-04-16
 
 ### Added

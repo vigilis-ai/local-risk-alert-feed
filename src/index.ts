@@ -3,7 +3,7 @@ export { AlertFeed } from './core';
 
 // Core components
 export { PluginRegistry, PluginResolver, AlertAggregator } from './core';
-export { resolveTimeRange, normalizeTimeRange } from './core';
+export { resolveTimeRange, normalizeTimeRange, parseRelativeRange } from './core';
 export type { PluginResolveOptions, ResolvedPlugin, AggregateOptions, AlertSortOrder } from './core';
 
 // Types

@@ -1,11 +1,11 @@
 import type { TimeRange, TimeRangeInput, TimeRangePreset } from '../types';
-import { resolveTimeRange as resolveTimeRangeUtil, resolveTimeRangePreset } from '../utils';
+import { resolveTimeRange as resolveTimeRangeUtil, resolveTimeRangePreset, parseRelativeRange } from '../utils';
 
 /**
  * Re-export time range utilities for use in core module.
  */
 export const resolveTimeRange = resolveTimeRangeUtil;
-export { resolveTimeRangePreset };
+export { resolveTimeRangePreset, parseRelativeRange };
 
 /**
  * Get the default time range preset.
@@ -29,7 +29,7 @@ export function getDefaultTimeRange(): TimeRange {
  * @returns Normalized TimeRange
  */
 export function normalizeTimeRange(
-  input?: TimeRangeInput,
+  input?: TimeRangeInput | string,
   defaultPreset: TimeRangePreset = 'next-24h'
 ): TimeRange {
   if (!input) {

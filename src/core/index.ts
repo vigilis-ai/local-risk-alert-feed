@@ -7,6 +7,7 @@ export type { AggregateOptions, AlertSortOrder } from './alert-aggregator';
 export {
   resolveTimeRange,
   resolveTimeRangePreset,
+  parseRelativeRange,
   getDefaultTimeRange,
   getDefaultTimeRangePreset,
   normalizeTimeRange,

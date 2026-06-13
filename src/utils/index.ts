@@ -1,8 +1,11 @@
 export {
   HOUR_MS,
   DAY_MS,
+  WEEK_MS,
+  MAX_RELATIVE_RANGE_MS,
   isTimeRangePreset,
   isTimeRange,
+  parseRelativeRange,
   resolveTimeRange,
   resolveTimeRangePreset,
   isDateInRange,
