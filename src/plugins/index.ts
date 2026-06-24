@@ -3,7 +3,7 @@ export { BasePlugin } from './base-plugin';
 export type { BasePluginConfig } from './base-plugin';
 
 // Weather plugins
-export { NWSWeatherPlugin } from './weather';
+export { NWSWeatherPlugin, classifyNwsEvent } from './weather';
 export type { NWSWeatherPluginConfig } from './weather';
 
 // Fire/EMS plugins
