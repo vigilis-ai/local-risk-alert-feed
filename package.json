@@ -71,6 +71,11 @@
       "require": "./dist/cjs/plugins/airport/index.js",
       "types": "./dist/types/plugins/airport/index.d.ts"
     },
+    "./plugins/nj": {
+      "import": "./dist/esm/plugins/nj/index.js",
+      "require": "./dist/cjs/plugins/nj/index.js",
+      "types": "./dist/types/plugins/nj/index.d.ts"
+    },
     "./plugins/seattle": {
       "import": "./dist/esm/plugins/seattle/index.js",
       "require": "./dist/cjs/plugins/seattle/index.js",
