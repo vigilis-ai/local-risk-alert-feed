@@ -56,6 +56,16 @@
       "require": "./dist/cjs/plugins/austin/index.js",
       "types": "./dist/types/plugins/austin/index.d.ts"
     },
+    "./plugins/atlanta": {
+      "import": "./dist/esm/plugins/atlanta/index.js",
+      "require": "./dist/cjs/plugins/atlanta/index.js",
+      "types": "./dist/types/plugins/atlanta/index.d.ts"
+    },
+    "./plugins/nyc": {
+      "import": "./dist/esm/plugins/nyc/index.js",
+      "require": "./dist/cjs/plugins/nyc/index.js",
+      "types": "./dist/types/plugins/nyc/index.d.ts"
+    },
     "./plugins/seattle": {
       "import": "./dist/esm/plugins/seattle/index.js",
       "require": "./dist/cjs/plugins/seattle/index.js",

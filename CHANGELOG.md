@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Atlanta Plugins** — Initial coverage for Atlanta, GA (Delta Air Lines main campus / Hartsfield-Jackson airport):
+  - `AtlantaCrimePlugin` — NIBRS crime incidents from the Atlanta Police Department Open Data hosted ArcGIS feature layer (`OpenDataWebsite_Crime_view`, updated hourly, includes precise lat/lng). Centered on downtown (33.7490, -84.3880) with a 40km radius that covers the airport ~13km south. Risk mapped from NIBRS offense + `Crime_Against`; firearm-involved incidents are escalated one level. No API key required.
+  - `AtlantaTrafficPlugin` — Traffic incidents, closures, and construction from Georgia DOT's 511 system (`https://511ga.org/api/v2/get/event`), 60km radius covering the I-285 perimeter and major interstates. Requires the free `GEORGIA_511_API_KEY` (throttled to 10 calls / 60s); falls back to that env var if `config.apiKey` is not passed.
+- **NYC Plugins** — Coverage for New York City:
+  - `NYCCrimePlugin` — Felony/misdemeanor/violation complaints from the NYPD via NYC Open Data (Socrata `5uac-w243`, GeoJSON, precise lat/lng). Centered on Manhattan (40.73, -73.99) with a 30km radius covering all five boroughs, the Financial District and Hudson Yards (Manhattan), and JFK (Queens, ~21km SE). Server-side spatial filter via `within_circle`. Risk is the higher of the law-category baseline (FELONY→high, MISDEMEANOR→moderate, VIOLATION→low) and an offense-keyword mapping. Updated quarterly (not a real-time dispatch feed). No API key required.
+  - `NYCTrafficPlugin` — Real-time traffic incidents, closures, and construction from NYSDOT's 511NY system (`https://511ny.org/api/getevents`). Same iBI511 vendor schema as GA511 but keyless, with `DD/MM/YYYY` date parsing and `IsFullClosure` inferred from EventType/LanesStatus. Statewide feed filtered to a 30km NYC radius (covers FiDi, Hudson Yards, and the JFK feeder highways — Van Wyck Expressway, Belt Parkway). Complements the quarterly crime data with near-real-time road conditions. No API key required.
+- **Package Exports** — Added `AtlantaCrimePlugin` / `AtlantaTrafficPlugin` / `NYCCrimePlugin` / `NYCTrafficPlugin` to `src/plugins/index.ts` and new `./plugins/atlanta` and `./plugins/nyc` modules.
+- Test scripts: `scripts/test-atlanta.ts` (pass airport coords `33.6407 -84.4277 8000` to focus on the Delta campus) and `scripts/test-nyc.ts` (tours FiDi, Hudson Yards, JFK with crime + traffic).
+- `GEORGIA_511_API_KEY` documented in `.env.example`.
+
+### Notes
+- Fire/EMS and events plugins for Atlanta are not yet included: Atlanta Fire Rescue does not publish a public real-time incident feed comparable to Austin/Seattle, and events would route through Ticketmaster (as Phoenix/Glendale do). Both are candidates for a follow-up.
+- **Jersey City, NJ has no usable live crime API.** Its open-data portal (`data.jerseycitynj.gov`) only exposes historical snapshots (JCPD calls-for-service tops out at 2017-08-01); the newer "real-time crime portal" is a dashboard not exposed via API. NYPD data does not cover NJ. A Jersey City feed would require scraping the dashboard or another source.
+- NYPD complaint data is the freshest citywide open crime source but lags ~one quarter; `NYCTrafficPlugin` (511NY) adds the near-real-time layer. Other NYC complements evaluated and skipped for now: **Notify NYC** emergency notifications (NYC OpenData `8vv7-7wx3`) are ~9 months stale and carry no coordinates; **FDNY incident dispatch** (`8m42-w767`) lags ~one quarter like crime.
+
 ## [0.7.0] - 2026-06-13
 
 ### Added

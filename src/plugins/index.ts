@@ -43,6 +43,14 @@ export type {
   SeattleEMTPluginConfig,
 } from './seattle';
 
+// Atlanta plugins
+export { AtlantaCrimePlugin, AtlantaTrafficPlugin } from './atlanta';
+export type { AtlantaCrimePluginConfig, AtlantaTrafficPluginConfig } from './atlanta';
+
+// NYC plugins
+export { NYCCrimePlugin, NYCTrafficPlugin } from './nyc';
+export type { NYCCrimePluginConfig, NYCTrafficPluginConfig } from './nyc';
+
 // Glendale plugins
 export { GlendaleEventsPlugin, GlendalePolicePlugin, GlendaleFirePlugin } from './glendale';
 export type {
