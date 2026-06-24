@@ -1,5 +1,54 @@
-import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel } from '../../types';
+import type {
+  PluginMetadata,
+  PluginFetchOptions,
+  PluginFetchResult,
+  RiskLevel,
+  AlertCategory,
+  AlertSourceType,
+} from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+
+/**
+ * Classify an NWS event name into an alert category. NWS alerts carry many
+ * non-weather all-hazards messages (civil emergencies, hazmat, 911 outages,
+ * fire weather) relayed by local emergency managers — route those off the
+ * generic "weather" bucket. Exported for testing.
+ */
+export function classifyNwsEvent(event: string): AlertCategory {
+  const e = (event ?? '').toLowerCase();
+
+  // Fire-related
+  if (e.includes('red flag') || e.includes('fire weather') || e.includes('fire warning')) {
+    return 'fire';
+  }
+
+  // Civil emergencies / public safety
+  if (
+    e.includes('civil emergency') ||
+    e.includes('civil danger') ||
+    e.includes('law enforcement') ||
+    e.includes('evacuation') ||
+    e.includes('shelter in place')
+  ) {
+    return 'civil-unrest';
+  }
+
+  // Other non-weather hazards
+  if (
+    e.includes('hazardous materials') ||
+    e.includes('radiological') ||
+    e.includes('nuclear') ||
+    e.includes('911') ||
+    e.includes('telephone outage') ||
+    e.includes('child abduction') ||
+    e.includes('amber alert') ||
+    e.includes('blue alert')
+  ) {
+    return 'other';
+  }
+
+  return 'weather';
+}
 
 /**
  * NWS Alert response structure.
@@ -86,7 +135,8 @@ export class NWSWeatherPlugin extends BasePlugin {
       freshnessDescription: 'Near real-time, alerts up to 7 days ahead',
     },
     supportedTemporalTypes: ['real-time', 'scheduled'],
-    supportedCategories: ['weather'],
+    // NWS relays all-hazards CAP messages, not just weather.
+    supportedCategories: ['weather', 'fire', 'civil-unrest', 'other'],
     refreshIntervalMs: 5 * 60 * 1000, // 5 minutes
   };
 
@@ -185,7 +235,7 @@ export class NWSWeatherPlugin extends BasePlugin {
       description: this.buildDescription(props),
       riskLevel,
       priority: this.riskLevelToPriority(riskLevel),
-      category: 'weather',
+      category: classifyNwsEvent(props.event),
       temporalType,
       location: {
         point: location,
@@ -246,6 +296,15 @@ export class NWSWeatherPlugin extends BasePlugin {
     }
 
     return fallback;
+  }
+
+  /**
+   * The source is always the NWS, regardless of the per-alert category, so
+   * override the category-derived default (which would otherwise resolve a
+   * fire-categorized alert to a 'fire' source).
+   */
+  protected getSourceType(): AlertSourceType {
+    return 'weather';
   }
 
   /**

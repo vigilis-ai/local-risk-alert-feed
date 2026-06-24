@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **NWS plugin now classifies all-hazards events** — `NWSWeatherPlugin` already ingested the full CAP feed (`/alerts/active?point=`); it now routes non-weather events to the right category instead of tagging everything `weather`: fire-weather/red-flag→`fire`, civil emergency/law enforcement/evacuation→`civil-unrest`, hazmat/radiological/911-outage/child-abduction→`other`. `supportedCategories` expanded accordingly; source type pinned to `weather`. New `classifyNwsEvent` helper is unit-tested.
+
 ### Added
 - **FAA Airport Status plugin** (`FAAAirportStatusPlugin`) — ground stops, ground delay programs, arrival/departure delays, and closures at major US airports from the FAA national feed (`https://nasstatus.faa.gov/`, XML, keyless). Global coverage over a built-in table of ~32 major airports (incl. ATL, JFK, LGA, EWR); emits an alert only when a major airport within `proximityMeters` (default 40km) of the query appears in the feed. Closures→extreme, ground stops→severe, ground/arrival delays scaled by minutes. Adds a `fetchXml` helper to `BasePlugin` (via `fast-xml-parser`) and a `./plugins/airport` export. Unit-tested duration parser.
 - **Atlanta Plugins** — Initial coverage for Atlanta, GA (Delta Air Lines main campus / Hartsfield-Jackson airport):
