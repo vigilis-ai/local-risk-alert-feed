@@ -55,6 +55,10 @@ export type { NYCCrimePluginConfig, NYCTrafficPluginConfig } from './nyc';
 export { NJTrafficPlugin } from './nj';
 export type { NJTrafficPluginConfig } from './nj';
 
+// MTA plugins
+export { MTAAlertsPlugin } from './mta';
+export type { MTAAlertsPluginConfig } from './mta';
+
 // Airport plugins
 export { FAAAirportStatusPlugin, parseFaaDurationMinutes } from './airport';
 export type { FAAAirportStatusPluginConfig } from './airport';

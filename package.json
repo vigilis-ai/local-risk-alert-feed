@@ -76,6 +76,11 @@
       "require": "./dist/cjs/plugins/nj/index.js",
       "types": "./dist/types/plugins/nj/index.d.ts"
     },
+    "./plugins/mta": {
+      "import": "./dist/esm/plugins/mta/index.js",
+      "require": "./dist/cjs/plugins/mta/index.js",
+      "types": "./dist/types/plugins/mta/index.d.ts"
+    },
     "./plugins/seattle": {
       "import": "./dist/esm/plugins/seattle/index.js",
       "require": "./dist/cjs/plugins/seattle/index.js",
