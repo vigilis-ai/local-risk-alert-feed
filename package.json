@@ -66,6 +66,11 @@
       "require": "./dist/cjs/plugins/nyc/index.js",
       "types": "./dist/types/plugins/nyc/index.d.ts"
     },
+    "./plugins/airport": {
+      "import": "./dist/esm/plugins/airport/index.js",
+      "require": "./dist/cjs/plugins/airport/index.js",
+      "types": "./dist/types/plugins/airport/index.d.ts"
+    },
     "./plugins/seattle": {
       "import": "./dist/esm/plugins/seattle/index.js",
       "require": "./dist/cjs/plugins/seattle/index.js",
@@ -107,6 +112,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "fast-xml-parser": "^5.9.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {

@@ -13,6 +13,8 @@ import { isPointInRadius } from '../geo';
 import { FetchError } from '../errors';
 import { withRetry, generateCacheKey, parseCSV } from '../utils';
 import type { CSVParseOptions } from '../utils';
+import { XMLParser } from 'fast-xml-parser';
+import type { X2jOptions } from 'fast-xml-parser';
 
 /**
  * Configuration for base plugin.
@@ -160,6 +162,55 @@ export abstract class BasePlugin implements AlertPlugin {
 
         const text = await response.text();
         return parseCSV<T>(text, options);
+      },
+      {
+        maxAttempts: this.config.maxRetries,
+        isRetryable: (error) => {
+          if (error instanceof FetchError) {
+            return error.isRetryable();
+          }
+          return true;
+        },
+      }
+    );
+  }
+
+  /**
+   * Fetch and parse XML data from a URL with retry logic.
+   *
+   * @param url - The URL to fetch from
+   * @param parserOptions - Options forwarded to fast-xml-parser's XMLParser
+   * @param init - Optional fetch init options
+   * @returns Parsed XML as a plain object
+   */
+  protected async fetchXml<T = unknown>(
+    url: string,
+    parserOptions?: X2jOptions,
+    init?: RequestInit
+  ): Promise<T> {
+    return withRetry(
+      async () => {
+        const response = await fetch(url, {
+          ...init,
+          headers: {
+            'User-Agent': this.config.userAgent!,
+            Accept: 'application/xml, text/xml, */*',
+            ...init?.headers,
+          },
+        });
+
+        if (!response.ok) {
+          throw FetchError.fromResponse(url, response);
+        }
+
+        const text = await response.text();
+        const parser = new XMLParser({
+          ignoreAttributes: false,
+          attributeNamePrefix: '@_',
+          trimValues: true,
+          ...parserOptions,
+        });
+        return parser.parse(text) as T;
       },
       {
         maxAttempts: this.config.maxRetries,

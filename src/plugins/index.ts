@@ -51,6 +51,10 @@ export type { AtlantaCrimePluginConfig, AtlantaTrafficPluginConfig } from './atl
 export { NYCCrimePlugin, NYCTrafficPlugin } from './nyc';
 export type { NYCCrimePluginConfig, NYCTrafficPluginConfig } from './nyc';
 
+// Airport plugins
+export { FAAAirportStatusPlugin, parseFaaDurationMinutes } from './airport';
+export type { FAAAirportStatusPluginConfig } from './airport';
+
 // Glendale plugins
 export { GlendaleEventsPlugin, GlendalePolicePlugin, GlendaleFirePlugin } from './glendale';
 export type {
