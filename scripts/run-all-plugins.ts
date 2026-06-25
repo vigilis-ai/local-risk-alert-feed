@@ -5,11 +5,7 @@
  */
 
 import { AlertFeed } from '../src';
-import { NWSWeatherPlugin } from '../src/plugins/weather';
-import { PhoenixFirePlugin, NIFCWildfirePlugin } from '../src/plugins/fire-emt';
-import { PhoenixEventsPlugin, PhoenixConventionCenterPlugin } from '../src/plugins/events';
-import { ArizonaTrafficPlugin } from '../src/plugins/traffic';
-import { BendPolicePlugin } from '../src/plugins/police';
+import { createDefaultPlugins } from '../src/plugins';
 
 interface LocationTest {
   name: string;
@@ -40,22 +36,8 @@ async function runTest(location: LocationTest, radiusMeters: number = 2000) {
     pluginTimeoutMs: 60000,
   });
 
-  // Check for optional API keys
-  const ticketmasterApiKey = process.env.TICKETMASTER_API_KEY;
-
-  // Register all plugins
-  await feed.registerPlugins([
-    { plugin: new NWSWeatherPlugin() },
-    { plugin: new PhoenixFirePlugin({ includeEMS: true }) },
-    { plugin: new NIFCWildfirePlugin({ includePrescribedBurns: false }) },
-    { plugin: new PhoenixEventsPlugin({
-      ticketmasterApiKey,
-      enableTicketmaster: !!ticketmasterApiKey,
-    }) },
-    { plugin: new PhoenixConventionCenterPlugin() },
-    { plugin: new ArizonaTrafficPlugin() },
-    { plugin: new BendPolicePlugin() },
-  ]);
+  // Register the canonical default plugin list (keys picked up from env).
+  await feed.registerPlugins(createDefaultPlugins());
 
   log('-'.repeat(80));
   log('REGISTERED PLUGINS');

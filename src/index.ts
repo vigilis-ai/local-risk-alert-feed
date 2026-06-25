@@ -108,6 +108,10 @@ export type { RetryOptions } from './utils';
 export { BasePlugin } from './plugins';
 export type { BasePluginConfig } from './plugins';
 
+// Canonical default plugin list (includes every production plugin, TRANSCOM disabled-safe)
+export { createDefaultPlugins } from './plugins';
+export type { DefaultPluginsOptions } from './plugins';
+
 // Built-in plugins
 export { NWSWeatherPlugin } from './plugins/weather';
 export type { NWSWeatherPluginConfig } from './plugins/weather';

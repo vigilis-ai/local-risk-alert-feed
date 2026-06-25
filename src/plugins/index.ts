@@ -2,6 +2,10 @@
 export { BasePlugin } from './base-plugin';
 export type { BasePluginConfig } from './base-plugin';
 
+// Default plugin list (every production plugin, ready to register)
+export { createDefaultPlugins } from './defaults';
+export type { DefaultPluginsOptions } from './defaults';
+
 // Weather plugins
 export { NWSWeatherPlugin, classifyNwsEvent } from './weather';
 export type { NWSWeatherPluginConfig } from './weather';
