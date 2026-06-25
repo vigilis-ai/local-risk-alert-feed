@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **`BaselineRiskPlugin` — relative-risk scoring within the existing plugin interface.** An abstract `BasePlugin` for rarely-changing, cell-quantized historical sources (e.g. crime by grid cell). It materializes the whole area once, scores every cell's **percentile rank** across the full cell universe, caches the snapshot keyed by the dataset version (re-checked at most once per `versionCheckTtlMs`, default 1h), and emits a **single summary `Alert` per query location** — relative tier in `riskLevel`, full breakdown in `metadata` (`kind: 'baseline-summary'`, totals, top categories, home-cell percentile, citywide context). No interface change: still an `AlertPlugin`. Pure `scoreCells` / `percentileToRisk` helpers are unit-tested. `./plugins/baseline` export.
+- **`PhoenixCrimeRiskPlugin`** — first `BaselineRiskPlugin`: City of Phoenix open crime data (624k+ incidents) aggregated over the 2,405-cell police grid (bundled `phoenix-grid.ts`), scored relative to the city. Registered in `createDefaultPlugins()`; `./plugins/phoenix-crime` export. Live-verified: a downtown site scores Extreme (99th pct), suburban malls Moderate-High; whole-grid cold build ~0.8s, then cached (sub-ms per site).
+
 ## [0.8.0] - 2026-06-25
 
 ### Changed

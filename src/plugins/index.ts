@@ -6,6 +6,21 @@ export type { BasePluginConfig } from './base-plugin';
 export { createDefaultPlugins } from './defaults';
 export type { DefaultPluginsOptions } from './defaults';
 
+// Baseline risk (historical, percentile-scored summary plugins)
+export {
+  BaselineRiskPlugin,
+  scoreCells,
+  percentileToRisk,
+} from './baseline';
+export type {
+  BaselineRiskPluginConfig,
+  CellStat,
+  CellSeverity,
+  ScoredCell,
+} from './baseline';
+export { PhoenixCrimeRiskPlugin } from './phoenix-crime';
+export type { PhoenixCrimeRiskPluginConfig } from './phoenix-crime';
+
 // Weather plugins
 export { NWSWeatherPlugin, classifyNwsEvent } from './weather';
 export type { NWSWeatherPluginConfig } from './weather';

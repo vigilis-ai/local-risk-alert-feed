@@ -86,6 +86,16 @@
       "require": "./dist/cjs/plugins/transcom/index.js",
       "types": "./dist/types/plugins/transcom/index.d.ts"
     },
+    "./plugins/baseline": {
+      "import": "./dist/esm/plugins/baseline/index.js",
+      "require": "./dist/cjs/plugins/baseline/index.js",
+      "types": "./dist/types/plugins/baseline/index.d.ts"
+    },
+    "./plugins/phoenix-crime": {
+      "import": "./dist/esm/plugins/phoenix-crime/index.js",
+      "require": "./dist/cjs/plugins/phoenix-crime/index.js",
+      "types": "./dist/types/plugins/phoenix-crime/index.d.ts"
+    },
     "./plugins/seattle": {
       "import": "./dist/esm/plugins/seattle/index.js",
       "require": "./dist/cjs/plugins/seattle/index.js",

@@ -15,6 +15,7 @@ import { NJWorkZonesPlugin } from './nj';
 import { MTAAlertsPlugin } from './mta';
 import { FAAAirportStatusPlugin } from './airport';
 import { TRANSCOMPlugin } from './transcom';
+import { PhoenixCrimeRiskPlugin } from './phoenix-crime';
 
 /**
  * Options for {@link createDefaultPlugins}. Each key falls back to the matching
@@ -64,6 +65,7 @@ export function createDefaultPlugins(options: DefaultPluginsOptions = {}): Plugi
     new PhoenixEventsPlugin({ ticketmasterApiKey, enableTicketmaster: !!ticketmasterApiKey }),
     new PhoenixConventionCenterPlugin(),
     new ArizonaTrafficPlugin(),
+    new PhoenixCrimeRiskPlugin(),
 
     // Bend, OR
     new BendPolicePlugin(),
