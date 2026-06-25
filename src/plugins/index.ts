@@ -52,8 +52,8 @@ export { NYCCrimePlugin, NYCTrafficPlugin } from './nyc';
 export type { NYCCrimePluginConfig, NYCTrafficPluginConfig } from './nyc';
 
 // New Jersey plugins
-export { NJTrafficPlugin } from './nj';
-export type { NJTrafficPluginConfig } from './nj';
+export { NJWorkZonesPlugin, mapWorkZoneRisk } from './nj';
+export type { NJWorkZonesPluginConfig } from './nj';
 
 // MTA plugins
 export { MTAAlertsPlugin } from './mta';

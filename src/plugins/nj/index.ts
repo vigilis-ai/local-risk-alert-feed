@@ -1,1 +1,1 @@
-export { NJTrafficPlugin, type NJTrafficPluginConfig } from './nj-traffic.plugin';
+export { NJWorkZonesPlugin, mapWorkZoneRisk, type NJWorkZonesPluginConfig } from './nj-workzones.plugin';
