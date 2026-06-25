@@ -59,6 +59,10 @@ export type { NJTrafficPluginConfig } from './nj';
 export { MTAAlertsPlugin } from './mta';
 export type { MTAAlertsPluginConfig } from './mta';
 
+// TRANSCOM (NY/NJ/CT aggregator) — SCAFFOLD, pending registration (see plugin header)
+export { TRANSCOMPlugin, mapTranscomSeverity } from './transcom';
+export type { TRANSCOMPluginConfig } from './transcom';
+
 // Airport plugins
 export { FAAAirportStatusPlugin, parseFaaDurationMinutes } from './airport';
 export type { FAAAirportStatusPluginConfig } from './airport';

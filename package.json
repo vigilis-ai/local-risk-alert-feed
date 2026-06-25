@@ -81,6 +81,11 @@
       "require": "./dist/cjs/plugins/mta/index.js",
       "types": "./dist/types/plugins/mta/index.d.ts"
     },
+    "./plugins/transcom": {
+      "import": "./dist/esm/plugins/transcom/index.js",
+      "require": "./dist/cjs/plugins/transcom/index.js",
+      "types": "./dist/types/plugins/transcom/index.d.ts"
+    },
     "./plugins/seattle": {
       "import": "./dist/esm/plugins/seattle/index.js",
       "require": "./dist/cjs/plugins/seattle/index.js",
