@@ -21,16 +21,33 @@ describe('mapTranscomSeverity', () => {
   });
 });
 
-describe('TRANSCOMPlugin (pending — requires feed URL)', () => {
-  it('throws without a feed URL so it cannot be silently enabled', () => {
+describe('TRANSCOMPlugin (registerable while disabled)', () => {
+  it('constructs without a feed URL and reports disabled (does not throw)', () => {
     const prev = process.env.TRANSCOM_FEED_URL;
     delete process.env.TRANSCOM_FEED_URL;
-    expect(() => new TRANSCOMPlugin()).toThrow(/feed URL is required/i);
+    const p = new TRANSCOMPlugin();
+    expect(p.configured).toBe(false);
+    expect(p.enabled).toBe(false);
     if (prev) process.env.TRANSCOM_FEED_URL = prev;
   });
 
-  it('constructs once a feed URL is provided', () => {
+  it('returns no alerts and a disabled warning when not configured', async () => {
+    const prev = process.env.TRANSCOM_FEED_URL;
+    delete process.env.TRANSCOM_FEED_URL;
+    const p = new TRANSCOMPlugin();
+    const res = await p.fetchAlerts({
+      location: { latitude: 40.73, longitude: -73.99 },
+      radiusMeters: 10000,
+      timeRange: { start: new Date().toISOString(), end: new Date().toISOString() },
+    } as Parameters<TRANSCOMPlugin['fetchAlerts']>[0]);
+    expect(res.alerts).toEqual([]);
+    expect(res.warnings?.[0]).toMatch(/disabled/i);
+    if (prev) process.env.TRANSCOM_FEED_URL = prev;
+  });
+
+  it('is enabled once a feed URL is provided', () => {
     const p = new TRANSCOMPlugin({ feedUrl: 'https://example.org/feed' });
+    expect(p.configured).toBe(true);
     expect(p.metadata.id).toBe('transcom');
   });
 });

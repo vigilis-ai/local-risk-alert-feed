@@ -16,7 +16,12 @@ import { BasePlugin, BasePluginConfig } from '../base-plugin';
  * https://data.xcmdata.org/DEWeb/Pages/index.jsp (support:
  * isgsupport@infosenseglobal.com). The exact event-feed URL and the XML element
  * names are only available after approval, so this file is a working pipeline
- * with the data-source-specific bits isolated and clearly marked:
+ * with the data-source-specific bits isolated and clearly marked.
+ *
+ * It is SAFE TO REGISTER NOW: without a feed URL it constructs fine, reports
+ * `configured === false`, and every query returns zero alerts plus a "disabled"
+ * warning (it never throws). Wire it into the feed today; it switches on the
+ * moment TRANSCOM_FEED_URL is set. To enable:
  *
  *   1. Set `feedUrl` (config or TRANSCOM_FEED_URL) to the registered endpoint.
  *   2. Set `apiKey` (config or TRANSCOM_API_KEY) if the feed uses a key param.
@@ -180,20 +185,22 @@ export class TRANSCOMPlugin extends BasePlugin {
   };
 
   private transcomConfig: TRANSCOMPluginConfig;
-  private feedUrl: string;
+  private feedUrl?: string;
   private apiKey?: string;
+
+  /**
+   * Whether the plugin has a feed URL and will actually fetch. When false the
+   * plugin is safe to register — it returns no alerts and a "disabled" warning
+   * instead of throwing — so it can be wired into the feed now and switched on
+   * later by setting TRANSCOM_FEED_URL (registration reopens 2026-08-01).
+   */
+  readonly configured: boolean;
 
   constructor(config?: TRANSCOMPluginConfig) {
     super(config);
-    const feedUrl = config?.feedUrl ?? process.env.TRANSCOM_FEED_URL;
-    if (!feedUrl) {
-      throw new Error(
-        'TRANSCOM feed URL is required (pass config.feedUrl or set TRANSCOM_FEED_URL). ' +
-          'Register at https://data.xcmdata.org/ to obtain it.'
-      );
-    }
-    this.feedUrl = feedUrl;
+    this.feedUrl = config?.feedUrl ?? process.env.TRANSCOM_FEED_URL;
     this.apiKey = config?.apiKey ?? process.env.TRANSCOM_API_KEY;
+    this.configured = !!this.feedUrl;
     this.transcomConfig = {
       apiKeyParam: 'key',
       includePlanned: true,
@@ -201,10 +208,29 @@ export class TRANSCOMPlugin extends BasePlugin {
     };
   }
 
+  /** True once a feed URL is set (alias of {@link configured}). */
+  get enabled(): boolean {
+    return this.configured;
+  }
+
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
     const { location, radiusMeters, timeRange } = options;
     const cacheKey = this.generateCacheKey(options);
     const warnings: string[] = [];
+
+    // Disabled-but-registered: no feed URL yet. Return empty + a clear warning
+    // instead of fetching/throwing, so the plugin can be wired in now.
+    if (!this.configured) {
+      return {
+        alerts: [],
+        fromCache: false,
+        cacheKey,
+        warnings: [
+          'TRANSCOM is registered but DISABLED — set TRANSCOM_FEED_URL to enable. ' +
+            'Account creation is paused until 2026-08-01 (https://data.xcmdata.org/).',
+        ],
+      };
+    }
 
     try {
       const { data, fromCache } = await this.getCachedOrFetch(
@@ -226,7 +252,7 @@ export class TRANSCOMPlugin extends BasePlugin {
   }
 
   private buildUrl(): string {
-    const url = new URL(this.feedUrl);
+    const url = new URL(this.feedUrl!);
     if (this.apiKey && this.transcomConfig.apiKeyParam) {
       url.searchParams.set(this.transcomConfig.apiKeyParam, this.apiKey);
     }
