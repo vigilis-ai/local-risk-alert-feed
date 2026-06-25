@@ -95,6 +95,60 @@ export function scoreCells(
 }
 
 /**
+ * Shape of `Alert.metadata` for a baseline-risk summary alert. Consumers
+ * (e.g. the UI) can narrow `alert.metadata` to this when
+ * `metadata.kind === 'baseline-summary'`.
+ *
+ * @example
+ * ```ts
+ * if (alert.metadata?.kind === 'baseline-summary') {
+ *   const m = alert.metadata as unknown as BaselineSummaryMetadata;
+ *   render(`${m.referencePercentile}th percentile — ${m.totals.violent} violent/yr nearby`);
+ * }
+ * ```
+ */
+export interface BaselineSummaryMetadata {
+  /** Discriminator — always `'baseline-summary'` for these alerts. */
+  kind: 'baseline-summary';
+  /** Dataset version this score was computed from (e.g. last_modified). */
+  datasetVersion: string;
+  /** Human label for the aggregation window (e.g. "all-time since 2015"). */
+  window: string;
+  /** Id of the cell the queried point sits in (may be undefined off-grid). */
+  homeCell?: string;
+  /** Percentile rank (0-100) of the home cell, vs the whole city. */
+  homePercentile?: number;
+  /** Percentile used to derive `riskLevel` (home cell, or top vicinity cell). */
+  referencePercentile: number;
+  /** Number of cells aggregated for the vicinity totals. */
+  vicinityCells: number;
+  /** Absolute incident totals across the vicinity. */
+  totals: { total: number; violent: number; property: number; other: number };
+  /** Per-source-category incident counts across the vicinity. */
+  byCategory: Record<string, number>;
+  /** Top categories by count, descending. */
+  topCategories: Array<{ category: string; count: number }>;
+  /** Citywide context for relative comparison. */
+  citywide: { medianMetric: number; p90Metric: number; cellsWithIncidents: number; universeSize: number };
+}
+
+/**
+ * One cell of the scored risk surface — used to render an area choropleth or
+ * heatmap. `cellId` is the join key to the source's published cell geometry
+ * (e.g. the Phoenix police-grid GeoJSON `GRID_NUMBER`); `centroid` lets the UI
+ * render points/heat without fetching that geometry.
+ */
+export interface RiskSurfaceCell {
+  cellId: string;
+  centroid?: GeoPoint;
+  percentile: number;
+  riskLevel: RiskLevel;
+  total: number;
+  violent: number;
+  property: number;
+}
+
+/**
  * Map a percentile rank to a relative risk level. Exported for testing.
  */
 export function percentileToRisk(percentile: number): RiskLevel {
@@ -173,6 +227,27 @@ export abstract class BaselineRiskPlugin extends BasePlugin {
   protected abstract windowLabel(): string;
 
   // --- shared pipeline ---------------------------------------------------
+
+  /**
+   * Return the full scored risk surface (every cell with incidents) for map
+   * rendering — a choropleth keyed by `cellId`, or a centroid heatmap. Uses the
+   * same cached, version-checked snapshot as {@link fetchAlerts}, so calling it
+   * is cheap once warm.
+   */
+  async getRiskSurface(): Promise<{ version: string; window: string; cells: RiskSurfaceCell[] }> {
+    const snap = await this.ensureSnapshot([]);
+    if (!snap) return { version: 'unknown', window: this.windowLabel(), cells: [] };
+    const cells: RiskSurfaceCell[] = Array.from(snap.byCell.values()).map((c) => ({
+      cellId: c.cellId,
+      centroid: this.cellCentroid(c.cellId),
+      percentile: c.percentile,
+      riskLevel: percentileToRisk(c.percentile),
+      total: c.total,
+      violent: c.violent,
+      property: c.property,
+    }));
+    return { version: snap.version, window: this.windowLabel(), cells };
+  }
 
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
     const { location, radiusMeters } = options;
@@ -313,7 +388,7 @@ export abstract class BaselineRiskPlugin extends BasePlugin {
         byCategory: totals.byCategory,
         topCategories,
         citywide: snap.context,
-      },
+      } satisfies BaselineSummaryMetadata as unknown as Record<string, unknown>,
     });
   }
 

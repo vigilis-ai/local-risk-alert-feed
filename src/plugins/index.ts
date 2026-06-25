@@ -17,6 +17,8 @@ export type {
   CellStat,
   CellSeverity,
   ScoredCell,
+  BaselineSummaryMetadata,
+  RiskSurfaceCell,
 } from './baseline';
 export { PhoenixCrimeRiskPlugin } from './phoenix-crime';
 export type { PhoenixCrimeRiskPluginConfig } from './phoenix-crime';
