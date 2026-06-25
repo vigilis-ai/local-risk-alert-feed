@@ -119,8 +119,8 @@ export type { NWSWeatherPluginConfig } from './plugins/weather';
 export { PhoenixFirePlugin, NIFCWildfirePlugin } from './plugins/fire-emt';
 export type { PhoenixFirePluginConfig, NIFCWildfirePluginConfig } from './plugins/fire-emt';
 
-export { PhoenixEventsPlugin } from './plugins/events';
-export type { PhoenixEventsPluginConfig } from './plugins/events';
+export { PhoenixEventsPlugin, PhoenixConventionCenterPlugin } from './plugins/events';
+export type { PhoenixEventsPluginConfig, PhoenixConventionCenterPluginConfig } from './plugins/events';
 
 export { ArizonaTrafficPlugin } from './plugins/traffic';
 export type { ArizonaTrafficPluginConfig } from './plugins/traffic';

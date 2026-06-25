@@ -2,7 +2,7 @@ import type { AlertPlugin, PluginRegistration } from '../types';
 
 import { NWSWeatherPlugin } from './weather';
 import { PhoenixFirePlugin, NIFCWildfirePlugin } from './fire-emt';
-import { PhoenixEventsPlugin } from './events';
+import { PhoenixEventsPlugin, PhoenixConventionCenterPlugin } from './events';
 import { ArizonaTrafficPlugin } from './traffic';
 import { AirNowPlugin } from './air-quality';
 import { BendPolicePlugin } from './police';
@@ -62,6 +62,7 @@ export function createDefaultPlugins(options: DefaultPluginsOptions = {}): Plugi
     // Phoenix / Arizona
     new PhoenixFirePlugin({ includeEMS: true }),
     new PhoenixEventsPlugin({ ticketmasterApiKey, enableTicketmaster: !!ticketmasterApiKey }),
+    new PhoenixConventionCenterPlugin(),
     new ArizonaTrafficPlugin(),
 
     // Bend, OR

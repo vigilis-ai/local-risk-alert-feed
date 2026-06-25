@@ -15,7 +15,7 @@ export { PhoenixFirePlugin, NIFCWildfirePlugin } from './fire-emt';
 export type { PhoenixFirePluginConfig, NIFCWildfirePluginConfig } from './fire-emt';
 
 // Events plugins
-export { PhoenixEventsPlugin } from './events';
+export { PhoenixEventsPlugin, PhoenixConventionCenterPlugin } from './events';
 export type { PhoenixEventsPluginConfig } from './events';
 
 // Traffic plugins
