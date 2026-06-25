@@ -10,12 +10,7 @@
  */
 
 import { AlertFeed } from '../src';
-import { NWSWeatherPlugin } from '../src/plugins/weather';
-import { PhoenixPolicePlugin } from '../src/plugins/police-blotter';
-import { PhoenixFirePlugin } from '../src/plugins/fire-emt';
-import { PhoenixEventsPlugin } from '../src/plugins/events';
-import { PulsepointPlugin } from '../src/plugins/pulsepoint';
-import { ArizonaTrafficPlugin } from '../src/plugins/traffic';
+import { createDefaultPlugins } from '../src/plugins';
 import type { TimeRangePreset, AlertCategory } from '../src/types';
 
 // Parse command line arguments
@@ -146,15 +141,8 @@ async function main() {
     pluginTimeoutMs: 30000,
   });
 
-  // Register plugins
-  await feed.registerPlugins([
-    { plugin: new NWSWeatherPlugin() },
-    { plugin: new PhoenixPolicePlugin() },
-    { plugin: new PhoenixFirePlugin() },
-    { plugin: new PhoenixEventsPlugin({ enableTicketmaster: false }) },
-    { plugin: new PulsepointPlugin() },
-    { plugin: new ArizonaTrafficPlugin() },
-  ]);
+  // Register the canonical default plugin list (keys picked up from env).
+  await feed.registerPlugins(createDefaultPlugins());
 
   // Build query
   const query: Parameters<typeof feed.query>[0] = {

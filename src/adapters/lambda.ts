@@ -35,10 +35,10 @@ export type LambdaHandler = (
  * @example
  * ```typescript
  * import { createLambdaHandler } from 'local-risk-alert-feed/adapters/lambda';
- * import { PhoenixPolicePlugin } from 'local-risk-alert-feed/plugins/police-blotter';
+ * import { createDefaultPlugins } from 'local-risk-alert-feed';
  *
  * export const handler = createLambdaHandler({
- *   plugins: [{ plugin: new PhoenixPolicePlugin() }]
+ *   plugins: createDefaultPlugins()
  * });
  * ```
  */

@@ -48,10 +48,10 @@ export interface VercelHandlerResult {
  * ```typescript
  * // app/api/alerts/route.ts
  * import { createVercelHandler } from 'local-risk-alert-feed/adapters/vercel';
- * import { PhoenixPolicePlugin } from 'local-risk-alert-feed/plugins/police-blotter';
+ * import { createDefaultPlugins } from 'local-risk-alert-feed';
  *
  * const { GET, POST } = createVercelHandler({
- *   plugins: [{ plugin: new PhoenixPolicePlugin() }]
+ *   plugins: createDefaultPlugins()
  * });
  *
  * export { GET, POST };
