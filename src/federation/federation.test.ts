@@ -3,7 +3,12 @@ import type { APIGatewayProxyEvent, Context } from 'aws-lambda';
 import type { AlertPlugin, PluginFetchOptions, PluginFetchResult, GeoPoint } from '../types';
 import { FederationClient } from './client';
 import { RemotePlugin } from './remote-plugin';
-import { StaticRegistrationStore, loadRemotePlugins, type CredentialResolver } from './store';
+import {
+  StaticRegistrationStore,
+  loadRemotePlugins,
+  primaryCredential,
+  type CredentialResolver,
+} from './store';
 import { computeSignature, verifyRequest } from './auth';
 import { EgressPolicy, EgressBlockedError, isBlockedIp } from './egress';
 import { CircuitBreaker, CircuitOpenError } from './circuit-breaker';
@@ -122,6 +127,56 @@ describe('auth', () => {
         canonicalPath: '/plugins/x/alerts',
         body: '{"a":1}',
         nowMs: timestampMs + 10 * 60 * 1000,
+      }).ok
+    ).toBe(false);
+  });
+
+  it('accepts either credential during a rotation window', () => {
+    const rotated = [
+      { token: 'new-tok', signingSecret: 'new-sec' },
+      { token: 'old-tok', signingSecret: 'old-sec' },
+    ];
+    const timestampMs = 2_000_000;
+    // A caller still signing with the OLD (previous) credential.
+    const oldSig = computeSignature({
+      signingSecret: 'old-sec',
+      timestampMs,
+      method: 'POST',
+      canonicalPath: '/plugins/x/alerts',
+      body: '{}',
+    });
+    const res = verifyRequest({
+      credentials: rotated,
+      headers: {
+        authorization: 'Bearer old-tok',
+        'x-vigilis-signature': `t=${timestampMs},v1=${oldSig}`,
+      },
+      method: 'POST',
+      canonicalPath: '/plugins/x/alerts',
+      body: '{}',
+      nowMs: timestampMs,
+    });
+    expect(res.ok).toBe(true);
+
+    // Mixed old token + new secret must NOT pass (must match the same credential).
+    const newSig = computeSignature({
+      signingSecret: 'new-sec',
+      timestampMs,
+      method: 'POST',
+      canonicalPath: '/plugins/x/alerts',
+      body: '{}',
+    });
+    expect(
+      verifyRequest({
+        credentials: rotated,
+        headers: {
+          authorization: 'Bearer old-tok',
+          'x-vigilis-signature': `t=${timestampMs},v1=${newSig}`,
+        },
+        method: 'POST',
+        canonicalPath: '/plugins/x/alerts',
+        body: '{}',
+        nowMs: timestampMs,
       }).ok
     ).toBe(false);
   });
@@ -253,7 +308,7 @@ describe('federation round-trip', () => {
     const plugin = new RemotePlugin({
       id: 'fake-weather',
       endpoint: 'https://plugins.example.test',
-      credentials: await creds.resolve('fake-weather'),
+      credentials: primaryCredential(await creds.resolve('fake-weather')),
       client,
     });
 
@@ -305,7 +360,7 @@ describe('federation round-trip', () => {
     const plugin = new RemotePlugin({
       id: 'fake-weather',
       endpoint: 'https://plugins.example.test',
-      credentials: await creds.resolve('fake-weather'),
+      credentials: primaryCredential(await creds.resolve('fake-weather')),
       client,
       manifestTtlMs: 60_000,
       now: () => clock,

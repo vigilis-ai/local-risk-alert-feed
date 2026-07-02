@@ -30,9 +30,22 @@ export interface RegistrationStore {
   list(): Promise<RemotePluginRecord[]>;
 }
 
-/** Resolves a plugin id to its bearer token + signing secret. */
+/**
+ * Resolves a plugin id to its credential(s).
+ *
+ * Return a single credential normally, or an array `[current, previous]` during
+ * a rotation window so the server accepts requests signed with either. The
+ * client always signs with the first (primary) credential.
+ */
 export interface CredentialResolver {
-  resolve(pluginId: string): Promise<PluginCredentials>;
+  resolve(pluginId: string): Promise<PluginCredentials | PluginCredentials[]>;
+}
+
+/** Pick the credential the client signs with (the primary / first). */
+export function primaryCredential(
+  credentials: PluginCredentials | PluginCredentials[]
+): PluginCredentials {
+  return Array.isArray(credentials) ? credentials[0] : credentials;
 }
 
 /** In-memory catalog for local/dev/tests. Platform provides the durable store. */
@@ -47,11 +60,15 @@ export class StaticRegistrationStore implements RegistrationStore {
  * Convention-based resolver for local/dev: reads
  * `PLUGIN_<ID>_TOKEN` / `PLUGIN_<ID>_SIGNING_SECRET` from the environment
  * (id upper-cased, non-alphanumerics → `_`). Production reads from the vault.
+ *
+ * For rotation, also set `PLUGIN_<ID>_TOKEN_PREVIOUS` /
+ * `PLUGIN_<ID>_SIGNING_SECRET_PREVIOUS`; when present the resolver returns
+ * `[current, previous]` so both are accepted during the window.
  */
 export class EnvCredentialResolver implements CredentialResolver {
   constructor(private readonly env: Record<string, string | undefined> = process.env) {}
 
-  async resolve(pluginId: string): Promise<PluginCredentials> {
+  async resolve(pluginId: string): Promise<PluginCredentials | PluginCredentials[]> {
     const key = pluginId.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
     const token = this.env[`PLUGIN_${key}_TOKEN`];
     const signingSecret = this.env[`PLUGIN_${key}_SIGNING_SECRET`];
@@ -60,7 +77,14 @@ export class EnvCredentialResolver implements CredentialResolver {
         `Missing credentials for plugin "${pluginId}" (expected PLUGIN_${key}_TOKEN and PLUGIN_${key}_SIGNING_SECRET)`
       );
     }
-    return { token, signingSecret };
+    const current: PluginCredentials = { token, signingSecret };
+
+    const prevToken = this.env[`PLUGIN_${key}_TOKEN_PREVIOUS`];
+    const prevSecret = this.env[`PLUGIN_${key}_SIGNING_SECRET_PREVIOUS`];
+    if (prevToken && prevSecret) {
+      return [current, { token: prevToken, signingSecret: prevSecret }];
+    }
+    return current;
   }
 }
 
@@ -100,7 +124,8 @@ export async function loadRemotePlugins(
       const plugin = new RemotePlugin({
         id: record.id,
         endpoint: record.endpoint,
-        credentials,
+        // The client signs with the primary; rotation only affects verification.
+        credentials: primaryCredential(credentials),
         client,
         manifestTtlMs: options.manifestTtlMs,
         circuitBreaker: options.circuitBreaker,

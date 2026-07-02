@@ -108,12 +108,15 @@ export function parseSignatureHeader(
  * Verify an inbound plugin request (server side).
  *
  * Checks the bearer token, the timestamp freshness (replay window), and the
- * HMAC signature — all in constant time where it matters.
+ * HMAC signature. `credentials` may be an **array** to support zero-downtime
+ * rotation: during a rotation window the resolver returns both the new and the
+ * previous credential, and a request signed with either is accepted (the
+ * bearer token and signature must both match the *same* credential).
  *
  * @param nowMs - current time in ms; injectable for testing.
  */
 export function verifyRequest(params: {
-  credentials: PluginCredentials;
+  credentials: PluginCredentials | PluginCredentials[];
   headers: Record<string, string | undefined>;
   method: string;
   canonicalPath: string;
@@ -123,13 +126,16 @@ export function verifyRequest(params: {
 }): VerifyResult {
   const tolerance = params.toleranceMs ?? DEFAULT_SIGNATURE_TOLERANCE_MS;
   const now = params.nowMs ?? Date.now();
+  const candidates = Array.isArray(params.credentials)
+    ? params.credentials
+    : [params.credentials];
 
   // Normalize header lookup to lower-case keys.
   const headers = normalizeHeaders(params.headers);
 
   const authHeader = headers[AUTH_HEADER];
   const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
-  if (!bearer || !safeEqual(bearer, params.credentials.token)) {
+  if (!bearer) {
     return { ok: false, reason: 'invalid or missing bearer token' };
   }
 
@@ -142,18 +148,21 @@ export function verifyRequest(params: {
     return { ok: false, reason: 'signature timestamp outside tolerance (replay?)' };
   }
 
-  const expected = computeSignature({
-    signingSecret: params.credentials.signingSecret,
-    timestampMs: parsed.timestampMs,
-    method: params.method,
-    canonicalPath: params.canonicalPath,
-    body: params.body,
-  });
-  if (!safeEqual(expected, parsed.signature)) {
-    return { ok: false, reason: 'signature mismatch' };
+  for (const credential of candidates) {
+    if (!safeEqual(bearer, credential.token)) continue;
+    const expected = computeSignature({
+      signingSecret: credential.signingSecret,
+      timestampMs: parsed.timestampMs,
+      method: params.method,
+      canonicalPath: params.canonicalPath,
+      body: params.body,
+    });
+    if (safeEqual(expected, parsed.signature)) {
+      return { ok: true };
+    }
   }
 
-  return { ok: true };
+  return { ok: false, reason: 'token/signature did not match any active credential' };
 }
 
 /** Lower-case all header keys so lookups are case-insensitive. */

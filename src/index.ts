@@ -146,6 +146,7 @@ export {
   StaticRegistrationStore,
   EnvCredentialResolver,
   loadRemotePlugins,
+  primaryCredential,
   buildAuthHeaders,
   verifyRequest,
   computeSignature,

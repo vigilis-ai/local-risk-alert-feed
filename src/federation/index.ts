@@ -15,6 +15,7 @@ export {
   StaticRegistrationStore,
   EnvCredentialResolver,
   loadRemotePlugins,
+  primaryCredential,
 } from './store';
 export type {
   RemotePluginRecord,
