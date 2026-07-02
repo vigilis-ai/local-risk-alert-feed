@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-02
+
+First stable release of the **federated plugin model** — plugins run out-of-process behind HTTP endpoints, discovered and called at runtime with no rebuild, and the framework surface (core, contract, federation, adapters, `BasePlugin`) is now the public SDK.
+
 ### Added
 - **Plugin federation — runtime-extensible, out-of-process plugins.** Plugins can now live behind HTTP endpoints (ours or third parties') that the framework discovers and calls at runtime, with **no rebuild or republish**. Everything is a remote endpoint, including our own plugins; the host owns caching/retries/timeouts/aggregation/telemetry and the endpoint is a stateless call-out. Design in `architecture/plugin-federation.md`.
   - **Wire contract (`./contract`)** — versioned Zod schemas (`PluginManifestSchema`, `PluginFetchOptionsSchema`, `PluginFetchResultSchema`) + `CONTRACT_VERSION`, reusing the existing `AlertSchema`. URLs are unversioned; the contract version travels in the manifest. Control-plane `GET {endpoint}/manifest` (cached, drives the resolver) vs data-plane `POST {endpoint}/alerts` (only on applicable + cache-miss).
