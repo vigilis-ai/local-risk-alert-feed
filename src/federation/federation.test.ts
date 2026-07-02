@@ -169,6 +169,50 @@ describe('federation round-trip', () => {
     expect(registrations[0].plugin.metadata.id).toBe('fake-weather');
   });
 
+  it('re-fetches the manifest after the TTL expires', async () => {
+    const handler = createPluginServiceHandler({
+      plugins: [new FakeWeatherPlugin()],
+      credentials: creds,
+    });
+    // Count manifest fetches by wrapping the stitched fetch.
+    let manifestCalls = 0;
+    const baseFetch = handlerAsFetch(handler);
+    const countingFetch = ((url: string | URL, init?: RequestInit) => {
+      if (String(url).endsWith('/manifest')) manifestCalls++;
+      return baseFetch(url, init);
+    }) as typeof fetch;
+
+    const client = new FederationClient({ fetchImpl: countingFetch });
+    let clock = 1_000_000;
+    const plugin = new RemotePlugin({
+      id: 'fake-weather',
+      endpoint: 'https://plugins.example.test',
+      credentials: await creds.resolve('fake-weather'),
+      client,
+      manifestTtlMs: 60_000,
+      now: () => clock,
+    });
+
+    await plugin.initialize();
+    expect(manifestCalls).toBe(1);
+
+    const opts: PluginFetchOptions = {
+      location: { latitude: 33.4, longitude: -112 },
+      radiusMeters: 5000,
+      timeRange: { start: '2026-07-01T00:00:00.000Z', end: '2026-07-02T00:00:00.000Z' },
+    };
+
+    // Within TTL: no refetch.
+    clock += 30_000;
+    await plugin.fetchAlerts(opts);
+    expect(manifestCalls).toBe(1);
+
+    // Past TTL: refetch on next fetchAlerts.
+    clock += 40_000;
+    await plugin.fetchAlerts(opts);
+    expect(manifestCalls).toBe(2);
+  });
+
   it('rejects a request signed with the wrong secret', async () => {
     const handler = createPluginServiceHandler({
       plugins: [new FakeWeatherPlugin()],

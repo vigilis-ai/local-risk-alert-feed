@@ -27,6 +27,14 @@ export interface RemotePluginOptions {
   credentials: PluginCredentials;
   /** Shared HTTP client (connection pooling lives here). */
   client: FederationClient;
+  /**
+   * How long a fetched manifest stays fresh, in ms. When set, the manifest is
+   * lazily re-fetched on the next `fetchAlerts` after it expires (best-effort;
+   * a failed refresh keeps the last-known-good metadata). Omit / 0 = load once.
+   */
+  manifestTtlMs?: number;
+  /** Injectable clock (testing). */
+  now?: () => number;
 }
 
 export class RemotePlugin implements AlertPlugin {
@@ -34,8 +42,11 @@ export class RemotePlugin implements AlertPlugin {
   private readonly endpoint: string;
   private readonly credentials: PluginCredentials;
   private readonly client: FederationClient;
+  private readonly manifestTtlMs?: number;
+  private readonly now: () => number;
 
   private loaded = false;
+  private loadedAt = 0;
   private _metadata: PluginMetadata;
 
   constructor(options: RemotePluginOptions) {
@@ -43,6 +54,8 @@ export class RemotePlugin implements AlertPlugin {
     this.endpoint = options.endpoint;
     this.credentials = options.credentials;
     this.client = options.client;
+    this.manifestTtlMs = options.manifestTtlMs;
+    this.now = options.now ?? (() => Date.now());
 
     // Placeholder metadata carries the real id (the registry reads `metadata.id`
     // before `initialize()` runs). Regional + no center/radius makes
@@ -78,6 +91,25 @@ export class RemotePlugin implements AlertPlugin {
     }
     this._metadata = manifest.metadata;
     this.loaded = true;
+    this.loadedAt = this.now();
+  }
+
+  /**
+   * Re-fetch the manifest if the TTL has expired. Best-effort: a failed refresh
+   * logs and keeps the last-known-good metadata so a transient manifest hiccup
+   * never fails a query.
+   */
+  private async ensureManifestFresh(): Promise<void> {
+    if (!this.manifestTtlMs || !this.loaded) return;
+    if (this.now() - this.loadedAt < this.manifestTtlMs) return;
+    try {
+      await this.initialize();
+    } catch (err) {
+      console.warn(
+        `RemotePlugin "${this.id}" manifest refresh failed; using cached metadata:`,
+        err
+      );
+    }
   }
 
   coversLocation(point: GeoPoint): boolean {
@@ -93,6 +125,7 @@ export class RemotePlugin implements AlertPlugin {
     if (!this.loaded) {
       throw new PluginFetchError(this.id, 'manifest not loaded; call initialize() first');
     }
+    await this.ensureManifestFresh();
     const result = await this.client.postAlerts(this.endpoint, this.id, this.credentials, {
       location: options.location,
       radiusMeters: options.radiusMeters,

@@ -67,6 +67,8 @@ export interface LoadRemotePluginsOptions {
   credentials: CredentialResolver;
   /** Shared client (owns the connection pool); one is created if omitted. */
   client?: FederationClient;
+  /** Manifest freshness TTL in ms applied to every loaded plugin (see {@link RemotePlugin}). */
+  manifestTtlMs?: number;
 }
 
 /**
@@ -90,6 +92,7 @@ export async function loadRemotePlugins(
         endpoint: record.endpoint,
         credentials,
         client,
+        manifestTtlMs: options.manifestTtlMs,
       });
       return { plugin, enabled: record.enabled ?? true } satisfies PluginRegistration;
     })
