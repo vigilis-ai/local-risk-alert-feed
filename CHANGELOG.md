@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
   - **Auth** — Stripe/GitHub-webhook model: per-request **bearer token + HMAC-SHA256 signature** (`t=…,v1=…`, `timestamp . method . canonicalPath . body`) with a replay window, on by default (no manifest `auth` field in v1). Signed path is derived from `(id, action)` so stage prefixes don't break verification. Round-trip + tamper/replay/wrong-secret tests included.
   - **Lambda host wiring** — `createLambdaHandler` accepts a `remotePlugins` option (`{ store, credentials, client?, manifestTtlMs? }`) and loads federated plugins at cold start alongside static ones. Registration now runs through a single awaited `ready` promise, so the first request can't race an unfinished registration (also removes a latent double-registration with the `AlertFeed` constructor).
   - **Manifest TTL refresh** — `RemotePlugin` takes `manifestTtlMs`: after the TTL expires, the manifest is lazily re-fetched on the next `fetchAlerts` so coverage/metadata stay current across a warm container. Best-effort — a failed refresh logs and keeps the last-known-good metadata, so a transient manifest hiccup never fails a query. Threaded through `loadRemotePlugins`; covered by a clock-driven test.
+  - **Vercel host wiring** — `createVercelHandler` gains the same `remotePlugins` option and single awaited `ready` registration path as the Lambda adapter, so federated plugins load at startup alongside static ones on Next.js App Router routes.
 
 ## [0.9.0] - 2026-06-25
 

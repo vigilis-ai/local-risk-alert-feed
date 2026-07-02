@@ -2,6 +2,8 @@ import type { AlertFeedConfig, AlertQueryResponse } from '../types';
 import { AlertFeed } from '../core';
 import { AlertQueryRequestSchema, transformRequestToQuery } from '../schemas';
 import { ValidationError } from '../errors';
+import { loadRemotePlugins } from '../federation';
+import type { LoadRemotePluginsOptions } from '../federation';
 
 /**
  * Options for the Vercel handler factory.
@@ -9,6 +11,12 @@ import { ValidationError } from '../errors';
 export interface VercelHandlerOptions extends AlertFeedConfig {
   /** CORS origin(s) to allow (default: '*') */
   corsOrigin?: string | string[];
+  /**
+   * Federated plugins to load at startup from a registration store —
+   * runtime-extensible endpoints (ours or third parties') with no redeploy.
+   * Loaded and registered alongside `plugins`; see {@link loadRemotePlugins}.
+   */
+  remotePlugins?: LoadRemotePluginsOptions;
 }
 
 /**
@@ -51,23 +59,42 @@ export interface VercelHandlerResult {
  * import { createDefaultPlugins } from 'local-risk-alert-feed';
  *
  * const { GET, POST } = createVercelHandler({
- *   plugins: createDefaultPlugins()
+ *   plugins: createDefaultPlugins(),
+ *   // Optional: load runtime-configured federated plugins from a store.
+ *   remotePlugins: {
+ *     store: myRegistrationStore,        // DynamoDB / control-plane API
+ *     credentials: myCredentialResolver, // secrets vault
+ *   },
  * });
  *
  * export { GET, POST };
  * ```
  */
 export function createVercelHandler(options: VercelHandlerOptions): VercelHandlerResult {
-  const feed = new AlertFeed(options);
+  // Register everything through the awaited `ready` promise below (not via the
+  // AlertFeed constructor) so local + federated plugins land through one
+  // deterministic path and the first request can't race an unfinished
+  // registration.
+  const feed = new AlertFeed({ ...options, plugins: undefined });
   const corsOrigin = options.corsOrigin ?? '*';
 
-  // Initialize plugins
-  if (options.plugins) {
-    feed.registerPlugins(options.plugins).catch(console.error);
-  }
+  // Initialize plugins once at startup: static registrations plus any
+  // federated (remote) plugins loaded from the registration store.
+  const ready = (async () => {
+    if (options.plugins?.length) {
+      await feed.registerPlugins(options.plugins);
+    }
+    if (options.remotePlugins) {
+      await feed.registerPlugins(await loadRemotePlugins(options.remotePlugins));
+    }
+  })();
+  ready.catch((error) => console.error('Plugin registration error:', error));
 
   const handleRequest = async (request: NextRequest): Promise<Response> => {
     try {
+      // Ensure plugin registration finished before serving the first query.
+      await ready;
+
       // Parse request
       const requestData = await parseRequest(request);
 
