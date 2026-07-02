@@ -131,3 +131,43 @@ export type { AirNowPluginConfig } from './plugins/air-quality';
 // CSV utilities (for custom plugins that need CSV parsing)
 export { parseCSV, toCSV } from './utils';
 export type { CSVParseOptions } from './utils';
+
+// Federation — host-side clients for plugins that live behind HTTP endpoints
+export {
+  RemotePlugin,
+  FederationClient,
+  joinUrl,
+  StaticRegistrationStore,
+  EnvCredentialResolver,
+  loadRemotePlugins,
+  buildAuthHeaders,
+  verifyRequest,
+  computeSignature,
+  parseSignatureHeader,
+  normalizeHeaders,
+  AUTH_HEADER,
+  SIGNATURE_HEADER,
+  DEFAULT_SIGNATURE_TOLERANCE_MS,
+} from './federation';
+export type {
+  RemotePluginOptions,
+  FederationClientOptions,
+  RemotePluginRecord,
+  RegistrationStore,
+  CredentialResolver,
+  LoadRemotePluginsOptions,
+  PluginCredentials,
+  VerifyResult,
+} from './federation';
+
+// Federation wire contract (schemas + version) — the public, versioned surface
+export {
+  CONTRACT_VERSION,
+  CONTRACT_VERSION_HEADER,
+  canonicalPath,
+  PluginManifestSchema,
+  PluginMetadataSchema,
+  PluginFetchOptionsSchema,
+  PluginFetchResultSchema,
+} from './contract';
+export type { PluginManifest, PluginFetchOptionsWire, PluginFetchResultWire } from './contract';

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Plugin federation — runtime-extensible, out-of-process plugins.** Plugins can now live behind HTTP endpoints (ours or third parties') that the framework discovers and calls at runtime, with **no rebuild or republish**. Everything is a remote endpoint, including our own plugins; the host owns caching/retries/timeouts/aggregation/telemetry and the endpoint is a stateless call-out. Design in `architecture/plugin-federation.md`.
+  - **Wire contract (`./contract`)** — versioned Zod schemas (`PluginManifestSchema`, `PluginFetchOptionsSchema`, `PluginFetchResultSchema`) + `CONTRACT_VERSION`, reusing the existing `AlertSchema`. URLs are unversioned; the contract version travels in the manifest. Control-plane `GET {endpoint}/manifest` (cached, drives the resolver) vs data-plane `POST {endpoint}/alerts` (only on applicable + cache-miss).
+  - **Host side (`./federation`)** — `RemotePlugin` (an ordinary `AlertPlugin`, so the existing registry/resolver/aggregator pipeline is unchanged and local + remote coexist), `FederationClient` (signing, timeouts, response validation, undici keep-alive with injectable `fetchImpl`), and the storage seams `RegistrationStore` / `CredentialResolver` with dev defaults (`StaticRegistrationStore`, `EnvCredentialResolver`) plus `loadRemotePlugins()` → `PluginRegistration[]`. Adding a plugin is adding a catalog row.
+  - **Server side (`./adapters/plugin-service`)** — `createPluginServiceHandler([...plugins])`: one Lambda serves many plugins, each on its own `/plugins/{id}/{manifest|alerts}` route, with per-plugin auth verification. An endpoint is a route, not a deployment, so re-segmenting plugins across deployments is a config change.
+  - **Auth** — Stripe/GitHub-webhook model: per-request **bearer token + HMAC-SHA256 signature** (`t=…,v1=…`, `timestamp . method . canonicalPath . body`) with a replay window, on by default (no manifest `auth` field in v1). Signed path is derived from `(id, action)` so stage prefixes don't break verification. Round-trip + tamper/replay/wrong-secret tests included.
+
 ## [0.9.0] - 2026-06-25
 
 ### Changed

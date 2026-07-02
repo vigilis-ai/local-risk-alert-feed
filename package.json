@@ -21,6 +21,21 @@
       "require": "./dist/cjs/adapters/vercel.js",
       "types": "./dist/types/adapters/vercel.d.ts"
     },
+    "./adapters/plugin-service": {
+      "import": "./dist/esm/adapters/plugin-service.js",
+      "require": "./dist/cjs/adapters/plugin-service.js",
+      "types": "./dist/types/adapters/plugin-service.d.ts"
+    },
+    "./federation": {
+      "import": "./dist/esm/federation/index.js",
+      "require": "./dist/cjs/federation/index.js",
+      "types": "./dist/types/federation/index.d.ts"
+    },
+    "./contract": {
+      "import": "./dist/esm/contract/index.js",
+      "require": "./dist/cjs/contract/index.js",
+      "types": "./dist/types/contract/index.d.ts"
+    },
     "./plugins/fire-emt": {
       "import": "./dist/esm/plugins/fire-emt/index.js",
       "require": "./dist/cjs/plugins/fire-emt/index.js",
