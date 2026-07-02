@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Plugin conformance suite + `vigilis-plugin-verify` CLI** — a runner-agnostic certification harness so any author (ours or third party) can prove a plugin is functional and speaks the contract. `runConformanceSuite()` (new `./testing` export) runs in two modes off the same checks: **SDK-object** (pass a plugin instance) and **endpoint** (pass an endpoint + credentials; it drives `/manifest` + `/alerts` over HTTP via `RemotePlugin` and probes auth enforcement — works for any language). Checks manifest schema/coherence, `coversLocation`, schema-valid alerts, `category ⊆ supportedCategories`, radius/limit sanity, and (endpoint mode) that the service rejects missing/bad/stale auth. Returns a structured `ConformanceReport` (no test-runner dependency). New `vigilis-plugin-verify` bin runs it against a live endpoint and exits non-zero on failure for CI. Authoring + certification guide in `architecture/plugin-authoring.md`.
+
 ## [1.0.0] - 2026-07-02
 
 First stable release of the **federated plugin model** — plugins run out-of-process behind HTTP endpoints, discovered and called at runtime with no rebuild, and the framework surface (core, contract, federation, adapters, `BasePlugin`) is now the public SDK.

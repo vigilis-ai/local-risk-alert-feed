@@ -36,6 +36,11 @@
       "require": "./dist/cjs/contract/index.js",
       "types": "./dist/types/contract/index.d.ts"
     },
+    "./testing": {
+      "import": "./dist/esm/testing/index.js",
+      "require": "./dist/cjs/testing/index.js",
+      "types": "./dist/types/testing/index.d.ts"
+    },
     "./plugins/fire-emt": {
       "import": "./dist/esm/plugins/fire-emt/index.js",
       "require": "./dist/cjs/plugins/fire-emt/index.js",
@@ -125,6 +130,9 @@
   "files": [
     "dist"
   ],
+  "bin": {
+    "vigilis-plugin-verify": "./dist/cjs/cli/verify.js"
+  },
   "publishConfig": {
     "access": "restricted"
   },
