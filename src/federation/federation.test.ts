@@ -6,6 +6,7 @@ import { RemotePlugin } from './remote-plugin';
 import { StaticRegistrationStore, loadRemotePlugins, type CredentialResolver } from './store';
 import { computeSignature, verifyRequest } from './auth';
 import { EgressPolicy, EgressBlockedError, isBlockedIp } from './egress';
+import { CircuitBreaker, CircuitOpenError } from './circuit-breaker';
 import { createPluginServiceHandler } from '../adapters/plugin-service';
 
 /** A trivial in-memory plugin used as the "remote" endpoint's implementation. */
@@ -122,6 +123,33 @@ describe('auth', () => {
         nowMs: timestampMs + 10 * 60 * 1000,
       }).ok
     ).toBe(false);
+  });
+});
+
+describe('circuit breaker', () => {
+  it('opens after the threshold, fails fast, then recovers half-open', async () => {
+    let clock = 0;
+    let calls = 0;
+    const breaker = new CircuitBreaker({ failureThreshold: 2, cooldownMs: 1000, now: () => clock });
+    const fail = () => {
+      calls++;
+      return Promise.reject(new Error('boom'));
+    };
+
+    // Two failures trip it.
+    await expect(breaker.execute(fail)).rejects.toThrow('boom');
+    await expect(breaker.execute(fail)).rejects.toThrow('boom');
+    expect(breaker.currentState).toBe('open');
+    expect(calls).toBe(2);
+
+    // While open + cooling down: fail fast, fn NOT called.
+    await expect(breaker.execute(fail)).rejects.toBeInstanceOf(CircuitOpenError);
+    expect(calls).toBe(2);
+
+    // After cooldown: half-open trial runs; success closes it.
+    clock += 1001;
+    await expect(breaker.execute(() => Promise.resolve('ok'))).resolves.toBe('ok');
+    expect(breaker.currentState).toBe('closed');
   });
 });
 

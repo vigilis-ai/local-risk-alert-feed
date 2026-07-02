@@ -8,6 +8,9 @@ export type { FederationClientOptions } from './client';
 export { EgressPolicy, EgressBlockedError, isBlockedIp } from './egress';
 export type { EgressPolicyOptions } from './egress';
 
+export { CircuitBreaker, CircuitOpenError } from './circuit-breaker';
+export type { CircuitBreakerOptions, CircuitState } from './circuit-breaker';
+
 export {
   StaticRegistrationStore,
   EnvCredentialResolver,

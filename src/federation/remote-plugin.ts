@@ -17,6 +17,7 @@ import { isPointInRadius } from '../geo';
 import { PluginFetchError } from '../errors';
 import { FederationClient } from './client';
 import type { PluginCredentials } from './auth';
+import { CircuitBreaker, type CircuitBreakerOptions } from './circuit-breaker';
 
 export interface RemotePluginOptions {
   /** Stable plugin id — matches the registration row and the manifest. */
@@ -33,6 +34,11 @@ export interface RemotePluginOptions {
    * a failed refresh keeps the last-known-good metadata). Omit / 0 = load once.
    */
   manifestTtlMs?: number;
+  /**
+   * Per-plugin circuit breaker for the data-plane call. Pass options to enable
+   * a fresh breaker, or a shared instance. Omit to disable (no breaker).
+   */
+  circuitBreaker?: CircuitBreakerOptions | CircuitBreaker;
   /** Injectable clock (testing). */
   now?: () => number;
 }
@@ -44,6 +50,7 @@ export class RemotePlugin implements AlertPlugin {
   private readonly client: FederationClient;
   private readonly manifestTtlMs?: number;
   private readonly now: () => number;
+  private readonly breaker?: CircuitBreaker;
 
   private loaded = false;
   private loadedAt = 0;
@@ -56,6 +63,11 @@ export class RemotePlugin implements AlertPlugin {
     this.client = options.client;
     this.manifestTtlMs = options.manifestTtlMs;
     this.now = options.now ?? (() => Date.now());
+    if (options.circuitBreaker instanceof CircuitBreaker) {
+      this.breaker = options.circuitBreaker;
+    } else if (options.circuitBreaker) {
+      this.breaker = new CircuitBreaker({ name: this.id, ...options.circuitBreaker });
+    }
 
     // Placeholder metadata carries the real id (the registry reads `metadata.id`
     // before `initialize()` runs). Regional + no center/radius makes
@@ -126,14 +138,16 @@ export class RemotePlugin implements AlertPlugin {
       throw new PluginFetchError(this.id, 'manifest not loaded; call initialize() first');
     }
     await this.ensureManifestFresh();
-    const result = await this.client.postAlerts(this.endpoint, this.id, this.credentials, {
-      location: options.location,
-      radiusMeters: options.radiusMeters,
-      timeRange: options.timeRange,
-      limit: options.limit,
-      categories: options.categories,
-      temporalTypes: options.temporalTypes,
-    });
+    const doFetch = () =>
+      this.client.postAlerts(this.endpoint, this.id, this.credentials, {
+        location: options.location,
+        radiusMeters: options.radiusMeters,
+        timeRange: options.timeRange,
+        limit: options.limit,
+        categories: options.categories,
+        temporalTypes: options.temporalTypes,
+      });
+    const result = this.breaker ? await this.breaker.execute(doFetch) : await doFetch();
     // Wire shape is validated by the client against the published Alert schema.
     return result as PluginFetchResult;
   }

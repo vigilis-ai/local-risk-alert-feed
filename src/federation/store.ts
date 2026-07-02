@@ -11,6 +11,7 @@ import { FederationClient } from './client';
 import { RemotePlugin } from './remote-plugin';
 import type { PluginCredentials } from './auth';
 import type { EgressPolicy } from './egress';
+import type { CircuitBreakerOptions } from './circuit-breaker';
 
 /**
  * A single plugin catalog entry. Deliberately minimal in v1: no `auth` field —
@@ -72,6 +73,8 @@ export interface LoadRemotePluginsOptions {
   manifestTtlMs?: number;
   /** SSRF egress policy for the default client (ignored when `client` is provided). */
   egress?: EgressPolicy;
+  /** Circuit-breaker settings applied per plugin (each gets its own breaker instance). */
+  circuitBreaker?: CircuitBreakerOptions;
 }
 
 /**
@@ -96,6 +99,7 @@ export async function loadRemotePlugins(
         credentials,
         client,
         manifestTtlMs: options.manifestTtlMs,
+        circuitBreaker: options.circuitBreaker,
       });
       return { plugin, enabled: record.enabled ?? true } satisfies PluginRegistration;
     })
