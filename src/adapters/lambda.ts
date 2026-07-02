@@ -3,6 +3,8 @@ import type { AlertFeedConfig, AlertQueryResponse } from '../types';
 import { AlertFeed } from '../core';
 import { AlertQueryRequestSchema, transformRequestToQuery } from '../schemas';
 import { ValidationError } from '../errors';
+import { loadRemotePlugins } from '../federation';
+import type { LoadRemotePluginsOptions } from '../federation';
 
 /**
  * Options for the Lambda handler factory.
@@ -14,6 +16,12 @@ export interface LambdaHandlerOptions extends AlertFeedConfig {
   corsHeaders?: string[];
   /** Additional CORS methods to allow */
   corsMethods?: string[];
+  /**
+   * Federated plugins to load at cold start from a registration store —
+   * runtime-extensible endpoints (ours or third parties') with no redeploy.
+   * Loaded and registered alongside `plugins`; see {@link loadRemotePlugins}.
+   */
+  remotePlugins?: LoadRemotePluginsOptions;
 }
 
 /**
@@ -38,12 +46,21 @@ export type LambdaHandler = (
  * import { createDefaultPlugins } from 'local-risk-alert-feed';
  *
  * export const handler = createLambdaHandler({
- *   plugins: createDefaultPlugins()
+ *   plugins: createDefaultPlugins(),
+ *   // Optional: load runtime-configured federated plugins from a store.
+ *   remotePlugins: {
+ *     store: myRegistrationStore,        // DynamoDB / control-plane API
+ *     credentials: myCredentialResolver, // Secrets Manager / SSM
+ *   },
  * });
  * ```
  */
 export function createLambdaHandler(options: LambdaHandlerOptions): LambdaHandler {
-  const feed = new AlertFeed(options);
+  // Register everything through the awaited `ready` promise below (not via the
+  // AlertFeed constructor) so local + federated plugins land through one
+  // deterministic path and the first request can't race an unfinished
+  // registration.
+  const feed = new AlertFeed({ ...options, plugins: undefined });
   const corsOrigin = options.corsOrigin ?? '*';
   const corsHeaders = [
     'Content-Type',
@@ -52,10 +69,17 @@ export function createLambdaHandler(options: LambdaHandlerOptions): LambdaHandle
   ].join(', ');
   const corsMethods = ['GET', 'POST', 'OPTIONS', ...(options.corsMethods ?? [])].join(', ');
 
-  // Initialize plugins
-  if (options.plugins) {
-    feed.registerPlugins(options.plugins).catch(console.error);
-  }
+  // Initialize plugins once at cold start: static registrations plus any
+  // federated (remote) plugins loaded from the registration store.
+  const ready = (async () => {
+    if (options.plugins?.length) {
+      await feed.registerPlugins(options.plugins);
+    }
+    if (options.remotePlugins) {
+      await feed.registerPlugins(await loadRemotePlugins(options.remotePlugins));
+    }
+  })();
+  ready.catch((error) => console.error('Plugin registration error:', error));
 
   return async (event: APIGatewayProxyEvent, _context: Context): Promise<APIGatewayProxyResult> => {
     // Handle CORS preflight
@@ -64,6 +88,9 @@ export function createLambdaHandler(options: LambdaHandlerOptions): LambdaHandle
     }
 
     try {
+      // Ensure plugin registration finished before serving the first query.
+      await ready;
+
       // Parse request
       const requestData = parseRequest(event);
 
