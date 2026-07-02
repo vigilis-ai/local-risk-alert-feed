@@ -1,6 +1,6 @@
 {
   "name": "@vigilisai/local-risk-alert-feed",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "TypeScript library for aggregating local risk alerts from multiple data sources via a plugin system",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -41,90 +41,10 @@
       "require": "./dist/cjs/testing/index.js",
       "types": "./dist/types/testing/index.d.ts"
     },
-    "./plugins/fire-emt": {
-      "import": "./dist/esm/plugins/fire-emt/index.js",
-      "require": "./dist/cjs/plugins/fire-emt/index.js",
-      "types": "./dist/types/plugins/fire-emt/index.d.ts"
-    },
-    "./plugins/events": {
-      "import": "./dist/esm/plugins/events/index.js",
-      "require": "./dist/cjs/plugins/events/index.js",
-      "types": "./dist/types/plugins/events/index.d.ts"
-    },
-    "./plugins/weather": {
-      "import": "./dist/esm/plugins/weather/index.js",
-      "require": "./dist/cjs/plugins/weather/index.js",
-      "types": "./dist/types/plugins/weather/index.d.ts"
-    },
-    "./plugins/traffic": {
-      "import": "./dist/esm/plugins/traffic/index.js",
-      "require": "./dist/cjs/plugins/traffic/index.js",
-      "types": "./dist/types/plugins/traffic/index.d.ts"
-    },
-    "./plugins/air-quality": {
-      "import": "./dist/esm/plugins/air-quality/index.js",
-      "require": "./dist/cjs/plugins/air-quality/index.js",
-      "types": "./dist/types/plugins/air-quality/index.d.ts"
-    },
-    "./plugins/police": {
-      "import": "./dist/esm/plugins/police/index.js",
-      "require": "./dist/cjs/plugins/police/index.js",
-      "types": "./dist/types/plugins/police/index.d.ts"
-    },
-    "./plugins/austin": {
-      "import": "./dist/esm/plugins/austin/index.js",
-      "require": "./dist/cjs/plugins/austin/index.js",
-      "types": "./dist/types/plugins/austin/index.d.ts"
-    },
-    "./plugins/atlanta": {
-      "import": "./dist/esm/plugins/atlanta/index.js",
-      "require": "./dist/cjs/plugins/atlanta/index.js",
-      "types": "./dist/types/plugins/atlanta/index.d.ts"
-    },
-    "./plugins/nyc": {
-      "import": "./dist/esm/plugins/nyc/index.js",
-      "require": "./dist/cjs/plugins/nyc/index.js",
-      "types": "./dist/types/plugins/nyc/index.d.ts"
-    },
-    "./plugins/airport": {
-      "import": "./dist/esm/plugins/airport/index.js",
-      "require": "./dist/cjs/plugins/airport/index.js",
-      "types": "./dist/types/plugins/airport/index.d.ts"
-    },
-    "./plugins/nj": {
-      "import": "./dist/esm/plugins/nj/index.js",
-      "require": "./dist/cjs/plugins/nj/index.js",
-      "types": "./dist/types/plugins/nj/index.d.ts"
-    },
-    "./plugins/mta": {
-      "import": "./dist/esm/plugins/mta/index.js",
-      "require": "./dist/cjs/plugins/mta/index.js",
-      "types": "./dist/types/plugins/mta/index.d.ts"
-    },
-    "./plugins/transcom": {
-      "import": "./dist/esm/plugins/transcom/index.js",
-      "require": "./dist/cjs/plugins/transcom/index.js",
-      "types": "./dist/types/plugins/transcom/index.d.ts"
-    },
     "./plugins/baseline": {
       "import": "./dist/esm/plugins/baseline/index.js",
       "require": "./dist/cjs/plugins/baseline/index.js",
       "types": "./dist/types/plugins/baseline/index.d.ts"
-    },
-    "./plugins/phoenix-crime": {
-      "import": "./dist/esm/plugins/phoenix-crime/index.js",
-      "require": "./dist/cjs/plugins/phoenix-crime/index.js",
-      "types": "./dist/types/plugins/phoenix-crime/index.d.ts"
-    },
-    "./plugins/seattle": {
-      "import": "./dist/esm/plugins/seattle/index.js",
-      "require": "./dist/cjs/plugins/seattle/index.js",
-      "types": "./dist/types/plugins/seattle/index.d.ts"
-    },
-    "./plugins/glendale": {
-      "import": "./dist/esm/plugins/glendale/index.js",
-      "require": "./dist/cjs/plugins/glendale/index.js",
-      "types": "./dist/types/plugins/glendale/index.d.ts"
     }
   },
   "files": [

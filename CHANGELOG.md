@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-02
+
+### Removed
+- **All concrete first-party plugins moved out of the framework** — the repo is now the framework/SDK only. Removed exports: every `./plugins/<city|source>` (weather, fire-emt, events, traffic, air-quality, police, austin, atlanta, nyc, airport, nj, mta, transcom, phoenix-crime, seattle, glendale) and `createDefaultPlugins()` / `DefaultPluginsOptions`, plus the city dev scripts and plugin API keys from `.env.example`. Concrete plugins now live in the consuming repo (`vigilis-api`) and import the SDK from `@vigilisai/local-risk-alert-feed`. Consumers are internal and migrate in lockstep, so this is a surface reduction rather than a semver-major break; the federated model (1.0.0) is unchanged.
+
+### Kept (the SDK surface)
+- Core (`AlertFeed`, registry, resolver, aggregator), `types`, `contract`, `federation`, adapters (incl. `plugin-service`), `testing` (conformance), `utils`/`geo`/`errors`/`schemas`, and the authoring bases **`BasePlugin`** and **`BaselineRiskPlugin`** (+ `scoreCells` / `percentileToRisk`, `./plugins/baseline` export).
+
 ## [1.0.1] - 2026-07-02
 
 ### Added

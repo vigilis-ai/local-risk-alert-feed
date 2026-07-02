@@ -105,29 +105,20 @@ export { withRetry, withTimeout, sleep, TimeoutError } from './utils';
 export type { RetryOptions } from './utils';
 export type { CacheKeyParams } from './utils';
 
-// Base plugin for building custom plugins
+// SDK base classes for building plugins (concrete plugins live in the consuming repo).
 export { BasePlugin } from './plugins';
 export type { BasePluginConfig } from './plugins';
 
-// Canonical default plugin list (includes every production plugin, TRANSCOM disabled-safe)
-export { createDefaultPlugins } from './plugins';
-export type { DefaultPluginsOptions } from './plugins';
-
-// Built-in plugins
-export { NWSWeatherPlugin } from './plugins/weather';
-export type { NWSWeatherPluginConfig } from './plugins/weather';
-
-export { PhoenixFirePlugin, NIFCWildfirePlugin } from './plugins/fire-emt';
-export type { PhoenixFirePluginConfig, NIFCWildfirePluginConfig } from './plugins/fire-emt';
-
-export { PhoenixEventsPlugin, PhoenixConventionCenterPlugin } from './plugins/events';
-export type { PhoenixEventsPluginConfig, PhoenixConventionCenterPluginConfig } from './plugins/events';
-
-export { ArizonaTrafficPlugin } from './plugins/traffic';
-export type { ArizonaTrafficPluginConfig } from './plugins/traffic';
-
-export { AirNowPlugin } from './plugins/air-quality';
-export type { AirNowPluginConfig } from './plugins/air-quality';
+// Baseline-risk authoring base + helpers (abstract; percentile-scored summaries).
+export { BaselineRiskPlugin, scoreCells, percentileToRisk } from './plugins';
+export type {
+  BaselineRiskPluginConfig,
+  CellStat,
+  CellSeverity,
+  ScoredCell,
+  BaselineSummaryMetadata,
+  RiskSurfaceCell,
+} from './plugins';
 
 // CSV utilities (for custom plugins that need CSV parsing)
 export { parseCSV, toCSV } from './utils';
