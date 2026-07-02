@@ -5,6 +5,9 @@ export type { RemotePluginOptions } from './remote-plugin';
 export { FederationClient, joinUrl } from './client';
 export type { FederationClientOptions } from './client';
 
+export { EgressPolicy, EgressBlockedError, isBlockedIp } from './egress';
+export type { EgressPolicyOptions } from './egress';
+
 export {
   StaticRegistrationStore,
   EnvCredentialResolver,

@@ -19,6 +19,7 @@ import {
 } from '../contract';
 import { FetchError } from '../errors';
 import { buildAuthHeaders, type PluginCredentials } from './auth';
+import { EgressPolicy } from './egress';
 
 export interface FederationClientOptions {
   /** Per-request timeout in ms (default: 10s). */
@@ -29,6 +30,12 @@ export interface FederationClientOptions {
   userAgent?: string;
   /** Injectable clock for signing timestamps (testing). */
   now?: () => number;
+  /**
+   * SSRF egress guard applied to every request URL. Defaults to a safe policy
+   * (HTTPS-only, private/loopback/link-local/metadata IPs blocked). Pass your
+   * own to add an allowlist or relax for local testing.
+   */
+  egress?: EgressPolicy;
 }
 
 /** Join a base endpoint with a canonical path, collapsing duplicate slashes. */
@@ -41,12 +48,14 @@ export class FederationClient {
   private readonly fetchImpl: typeof fetch;
   private readonly userAgent: string;
   private readonly now: () => number;
+  private readonly egress: EgressPolicy;
 
   constructor(options: FederationClientOptions = {}) {
     this.timeoutMs = options.timeoutMs ?? 10_000;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.userAgent = options.userAgent ?? 'VigilisAlertFeed-Host/1.0';
     this.now = options.now ?? (() => Date.now());
+    this.egress = options.egress ?? new EgressPolicy();
   }
 
   /** `GET {endpoint}/plugins/{id}/manifest` — control plane. */
@@ -81,6 +90,10 @@ export class FederationClient {
   ): Promise<unknown> {
     const path = canonicalPath(pluginId, action);
     const url = joinUrl(endpoint, path);
+
+    // SSRF guard: validate the destination before doing anything else.
+    await this.egress.assertAllowed(url);
+
     const timestampMs = this.now();
 
     const headers: Record<string, string> = {

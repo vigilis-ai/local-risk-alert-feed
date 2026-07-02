@@ -137,6 +137,9 @@ export {
   RemotePlugin,
   FederationClient,
   joinUrl,
+  EgressPolicy,
+  EgressBlockedError,
+  isBlockedIp,
   StaticRegistrationStore,
   EnvCredentialResolver,
   loadRemotePlugins,
@@ -152,6 +155,7 @@ export {
 export type {
   RemotePluginOptions,
   FederationClientOptions,
+  EgressPolicyOptions,
   RemotePluginRecord,
   RegistrationStore,
   CredentialResolver,

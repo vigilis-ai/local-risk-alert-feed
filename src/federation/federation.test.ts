@@ -5,6 +5,7 @@ import { FederationClient } from './client';
 import { RemotePlugin } from './remote-plugin';
 import { StaticRegistrationStore, loadRemotePlugins, type CredentialResolver } from './store';
 import { computeSignature, verifyRequest } from './auth';
+import { EgressPolicy, EgressBlockedError, isBlockedIp } from './egress';
 import { createPluginServiceHandler } from '../adapters/plugin-service';
 
 /** A trivial in-memory plugin used as the "remote" endpoint's implementation. */
@@ -121,6 +122,66 @@ describe('auth', () => {
         nowMs: timestampMs + 10 * 60 * 1000,
       }).ok
     ).toBe(false);
+  });
+});
+
+describe('egress policy (SSRF guard)', () => {
+  it('classifies private / metadata / public addresses', () => {
+    expect(isBlockedIp('169.254.169.254')).toBe(true); // cloud metadata
+    expect(isBlockedIp('127.0.0.1')).toBe(true);
+    expect(isBlockedIp('10.1.2.3')).toBe(true);
+    expect(isBlockedIp('192.168.0.5')).toBe(true);
+    expect(isBlockedIp('172.16.4.4')).toBe(true);
+    expect(isBlockedIp('::1')).toBe(true);
+    expect(isBlockedIp('fd00:ec2::254')).toBe(true);
+    expect(isBlockedIp('8.8.8.8')).toBe(false);
+    expect(isBlockedIp('93.184.216.34')).toBe(false);
+  });
+
+  it('blocks http, private IPs and the metadata endpoint by default', async () => {
+    const policy = new EgressPolicy();
+    await expect(policy.assertAllowed('http://example.com/x')).rejects.toBeInstanceOf(
+      EgressBlockedError
+    );
+    await expect(policy.assertAllowed('https://169.254.169.254/latest')).rejects.toBeInstanceOf(
+      EgressBlockedError
+    );
+    await expect(policy.assertAllowed('https://10.0.0.1/x')).rejects.toBeInstanceOf(
+      EgressBlockedError
+    );
+    await expect(policy.assertAllowed('https://plugins.example.com/x')).resolves.toBeUndefined();
+  });
+
+  it('enforces an allowlist', async () => {
+    const policy = new EgressPolicy({ allowedHosts: ['.trusted.io'] });
+    await expect(policy.assertAllowed('https://api.trusted.io/x')).resolves.toBeUndefined();
+    await expect(policy.assertAllowed('https://evil.example/x')).rejects.toBeInstanceOf(
+      EgressBlockedError
+    );
+  });
+
+  it('range-checks resolved DNS addresses when enabled', async () => {
+    const policy = new EgressPolicy({
+      resolveDns: true,
+      lookup: async () => ['169.254.169.254'], // hostname secretly resolves to metadata
+    });
+    await expect(policy.assertAllowed('https://sneaky.example/x')).rejects.toBeInstanceOf(
+      EgressBlockedError
+    );
+  });
+
+  it('the client rejects a blocked endpoint before fetching', async () => {
+    let fetched = false;
+    const client = new FederationClient({
+      fetchImpl: (async () => {
+        fetched = true;
+        return new Response('{}');
+      }) as unknown as typeof fetch,
+    });
+    await expect(
+      client.getManifest('https://169.254.169.254', 'x', { token: 't', signingSecret: 's' })
+    ).rejects.toBeInstanceOf(EgressBlockedError);
+    expect(fetched).toBe(false);
   });
 });
 

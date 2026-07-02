@@ -10,6 +10,7 @@ import type { PluginRegistration } from '../types';
 import { FederationClient } from './client';
 import { RemotePlugin } from './remote-plugin';
 import type { PluginCredentials } from './auth';
+import type { EgressPolicy } from './egress';
 
 /**
  * A single plugin catalog entry. Deliberately minimal in v1: no `auth` field —
@@ -69,6 +70,8 @@ export interface LoadRemotePluginsOptions {
   client?: FederationClient;
   /** Manifest freshness TTL in ms applied to every loaded plugin (see {@link RemotePlugin}). */
   manifestTtlMs?: number;
+  /** SSRF egress policy for the default client (ignored when `client` is provided). */
+  egress?: EgressPolicy;
 }
 
 /**
@@ -81,7 +84,7 @@ export interface LoadRemotePluginsOptions {
 export async function loadRemotePlugins(
   options: LoadRemotePluginsOptions
 ): Promise<PluginRegistration[]> {
-  const client = options.client ?? new FederationClient();
+  const client = options.client ?? new FederationClient({ egress: options.egress });
   const records = await options.store.list();
 
   return Promise.all(
