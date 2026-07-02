@@ -103,6 +103,7 @@ export {
 // Utility functions
 export { withRetry, withTimeout, sleep, TimeoutError } from './utils';
 export type { RetryOptions } from './utils';
+export type { CacheKeyParams } from './utils';
 
 // Base plugin for building custom plugins
 export { BasePlugin } from './plugins';

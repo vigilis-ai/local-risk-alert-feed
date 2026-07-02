@@ -23,6 +23,7 @@ export {
   DynamoDBCacheProvider,
   generateCacheKey,
 } from './cache';
+export type { CacheKeyParams } from './cache';
 
 export { parseCSV, toCSV } from './csv';
 export type { CSVParseOptions } from './csv';

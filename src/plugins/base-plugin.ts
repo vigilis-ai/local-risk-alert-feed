@@ -45,9 +45,13 @@ export abstract class BasePlugin implements AlertPlugin {
   protected config: BasePluginConfig;
   protected cache?: CacheProvider;
 
+  /** Global fallback cache TTL when a plugin declares none. */
+  protected static readonly DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
+
   constructor(config?: BasePluginConfig) {
+    // Note: `cacheTtlMs` is intentionally NOT defaulted here so per-source TTL
+    // (metadata.refreshIntervalMs) can take effect; see getCacheTtlMs().
     this.config = {
-      cacheTtlMs: 5 * 60 * 1000, // 5 minutes default
       maxRetries: 3,
       userAgent: 'LocalRiskAlertFeed/1.0',
       ...config,
@@ -242,17 +246,45 @@ export abstract class BasePlugin implements AlertPlugin {
     const data = await fetcher();
 
     if (this.cache) {
-      await this.cache.set(cacheKey, data, ttlMs ?? this.config.cacheTtlMs);
+      await this.cache.set(cacheKey, data, this.getCacheTtlMs(ttlMs));
     }
 
     return { data, fromCache: false };
   }
 
   /**
-   * Generate a cache key for this plugin and query options.
+   * Resolve the cache TTL for this plugin (per-source TTL).
+   *
+   * Precedence: explicit argument → plugin `cacheTtlMs` config → the plugin's
+   * own `metadata.refreshIntervalMs` (its declared freshness) → global default.
+   * This lets each source cache for as long as its data stays fresh — e.g. a
+   * throttled events feed can use a long TTL while a real-time feed stays short.
+   */
+  protected getCacheTtlMs(explicitMs?: number): number {
+    return (
+      explicitMs ??
+      this.config.cacheTtlMs ??
+      this.metadata.refreshIntervalMs ??
+      BasePlugin.DEFAULT_CACHE_TTL_MS
+    );
+  }
+
+  /**
+   * Generate a query-exact cache key for this plugin and query options.
+   * Every result-affecting field (location, radius, time window, filters,
+   * limit) is part of the key, so cached data is never reused for a materially
+   * different query.
    */
   protected generateCacheKey(options: PluginFetchOptions): string {
-    return generateCacheKey(this.metadata.id, options.location, options.timeRange);
+    return generateCacheKey({
+      pluginId: this.metadata.id,
+      location: options.location,
+      radiusMeters: options.radiusMeters,
+      timeRange: options.timeRange,
+      categories: options.categories,
+      temporalTypes: options.temporalTypes,
+      limit: options.limit,
+    });
   }
 
   /**

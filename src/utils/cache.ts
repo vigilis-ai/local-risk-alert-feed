@@ -230,27 +230,63 @@ interface DynamoDBDocumentClient {
 }
 
 /**
- * Generate a cache key for alert feed queries.
+ * Parameters that identify a unique alert-feed query for caching.
  *
- * @param pluginId - Plugin identifier
- * @param location - Location coordinates
- * @param timeRange - Time range for the query
- * @returns A unique cache key string
+ * Every field that changes the result set is part of the key, so a cached
+ * entry is only ever reused for an identical query. In particular the **radius**
+ * and the **exact time window** are included — a west-Phoenix / 5km lookup can
+ * never be served from an east-Phoenix or 10km entry, and a "past 6h" window
+ * won't collide with a "past 24h" window on the same day.
  */
-export function generateCacheKey(
-  pluginId: string,
-  location: { latitude: number; longitude: number },
-  timeRange: { start: string; end: string }
-): string {
-  // Round coordinates to 3 decimal places (~100m precision) for cache hit efficiency
-  const lat = location.latitude.toFixed(3);
-  const lon = location.longitude.toFixed(3);
-  const locationHash = `${lat},${lon}`;
+export interface CacheKeyParams {
+  /** Plugin identifier. */
+  pluginId: string;
+  /** Query center. */
+  location: { latitude: number; longitude: number };
+  /** Resolved (explicit) time range. */
+  timeRange: { start: string; end: string };
+  /** Query radius in meters (distinct radii get distinct keys). */
+  radiusMeters?: number;
+  /** Category filter (order-independent). */
+  categories?: string[];
+  /** Temporal-type filter (order-independent). */
+  temporalTypes?: string[];
+  /** Result limit. */
+  limit?: number;
+  /**
+   * Coordinate decimals to retain in the key (default 5 ≈ 1.1m — effectively
+   * exact). Lower it deliberately (e.g. snap to a site) to share cache across
+   * nearby queries; the framework never coarsens location on its own.
+   */
+  locationPrecision?: number;
+}
 
-  // Use date only for time range (hourly granularity would cause too many cache misses)
-  const startDate = timeRange.start.slice(0, 10);
-  const endDate = timeRange.end.slice(0, 10);
-  const timeHash = `${startDate}_${endDate}`;
+/**
+ * Generate a query-exact cache key. Reused only for an identical query
+ * (plugin, location, radius, time window, filters, limit) so cached data is
+ * never returned for a materially different request.
+ */
+export function generateCacheKey(params: CacheKeyParams): string {
+  const precision = params.locationPrecision ?? 5;
+  const lat = params.location.latitude.toFixed(precision);
+  const lon = params.location.longitude.toFixed(precision);
 
-  return `alert-feed:${pluginId}:${locationHash}:${timeHash}`;
+  const parts = [
+    `plugin=${params.pluginId}`,
+    `loc=${lat},${lon}`,
+    `r=${params.radiusMeters !== undefined ? Math.round(params.radiusMeters) : 'default'}`,
+    // Full ISO window — no day-level truncation, so distinct windows never collide.
+    `t=${params.timeRange.start}_${params.timeRange.end}`,
+  ];
+  if (params.categories?.length) {
+    parts.push(`cat=${[...params.categories].sort().join(',')}`);
+  }
+  if (params.temporalTypes?.length) {
+    parts.push(`tt=${[...params.temporalTypes].sort().join(',')}`);
+  }
+  if (params.limit !== undefined) {
+    parts.push(`lim=${params.limit}`);
+  }
+
+  return `alert-feed:${parts.join(':')}`;
 }
