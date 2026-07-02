@@ -2,7 +2,7 @@
 export { RemotePlugin } from './remote-plugin';
 export type { RemotePluginOptions } from './remote-plugin';
 
-export { FederationClient, joinUrl } from './client';
+export { FederationClient, joinUrl, ResponseTooLargeError } from './client';
 export type { FederationClientOptions } from './client';
 
 export { EgressPolicy, EgressBlockedError, isBlockedIp } from './egress';

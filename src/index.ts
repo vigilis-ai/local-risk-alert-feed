@@ -137,6 +137,7 @@ export {
   RemotePlugin,
   FederationClient,
   joinUrl,
+  ResponseTooLargeError,
   EgressPolicy,
   EgressBlockedError,
   isBlockedIp,

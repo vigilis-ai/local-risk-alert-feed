@@ -7,6 +7,7 @@ import { StaticRegistrationStore, loadRemotePlugins, type CredentialResolver } f
 import { computeSignature, verifyRequest } from './auth';
 import { EgressPolicy, EgressBlockedError, isBlockedIp } from './egress';
 import { CircuitBreaker, CircuitOpenError } from './circuit-breaker';
+import { ResponseTooLargeError } from './client';
 import { createPluginServiceHandler } from '../adapters/plugin-service';
 
 /** A trivial in-memory plugin used as the "remote" endpoint's implementation. */
@@ -123,6 +124,34 @@ describe('auth', () => {
         nowMs: timestampMs + 10 * 60 * 1000,
       }).ok
     ).toBe(false);
+  });
+});
+
+describe('response-size caps', () => {
+  const okCreds = { token: 't', signingSecret: 's' };
+
+  it('rejects on an oversized Content-Length before reading', async () => {
+    const client = new FederationClient({
+      maxResponseBytes: 1024,
+      fetchImpl: (async () =>
+        new Response('{}', {
+          headers: { 'content-length': String(10 * 1024 * 1024) },
+        })) as unknown as typeof fetch,
+    });
+    await expect(
+      client.getManifest('https://plugins.example.test', 'x', okCreds)
+    ).rejects.toBeInstanceOf(ResponseTooLargeError);
+  });
+
+  it('rejects when the streamed body exceeds the cap', async () => {
+    const big = 'x'.repeat(5000);
+    const client = new FederationClient({
+      maxResponseBytes: 1000,
+      fetchImpl: (async () => new Response(big)) as unknown as typeof fetch,
+    });
+    await expect(
+      client.getManifest('https://plugins.example.test', 'x', okCreds)
+    ).rejects.toBeInstanceOf(ResponseTooLargeError);
   });
 });
 

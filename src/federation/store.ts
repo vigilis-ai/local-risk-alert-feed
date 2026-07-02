@@ -75,6 +75,8 @@ export interface LoadRemotePluginsOptions {
   egress?: EgressPolicy;
   /** Circuit-breaker settings applied per plugin (each gets its own breaker instance). */
   circuitBreaker?: CircuitBreakerOptions;
+  /** Hard response-size cap in bytes for the default client (ignored when `client` is provided). */
+  maxResponseBytes?: number;
 }
 
 /**
@@ -87,7 +89,9 @@ export interface LoadRemotePluginsOptions {
 export async function loadRemotePlugins(
   options: LoadRemotePluginsOptions
 ): Promise<PluginRegistration[]> {
-  const client = options.client ?? new FederationClient({ egress: options.egress });
+  const client =
+    options.client ??
+    new FederationClient({ egress: options.egress, maxResponseBytes: options.maxResponseBytes });
   const records = await options.store.list();
 
   return Promise.all(
