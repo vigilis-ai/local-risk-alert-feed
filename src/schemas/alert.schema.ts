@@ -1,6 +1,16 @@
 import { z } from 'zod';
 
 /**
+ * Optional string that also tolerates upstream `null` (common in third-party
+ * feeds that emit `null` rather than omitting a field), normalizing it to
+ * `undefined` so the validated output still matches the `?: string` interfaces.
+ */
+const optionalString = z
+  .string()
+  .nullish()
+  .transform((v) => v ?? undefined);
+
+/**
  * Schema for geographic point coordinates.
  */
 export const GeoPointSchema = z.object({
@@ -14,10 +24,10 @@ export const GeoPointSchema = z.object({
 export const AlertLocationSchema = z.object({
   point: GeoPointSchema,
   radiusMeters: z.number().positive().optional(),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  zipCode: z.string().optional(),
+  address: optionalString,
+  city: optionalString,
+  state: optionalString,
+  zipCode: optionalString,
 });
 
 /**
@@ -58,7 +68,15 @@ export const AlertTemporalTypeSchema = z.enum(['historical', 'scheduled', 'real-
 /**
  * Schema for alert source types.
  */
-export const AlertSourceTypeSchema = z.enum(['police', 'fire', 'weather', 'events', 'other']);
+// Must stay in sync with the `AlertSourceType` union in ../types/alert.ts.
+export const AlertSourceTypeSchema = z.enum([
+  'police',
+  'fire',
+  'weather',
+  'events',
+  'traffic',
+  'other',
+]);
 
 /**
  * Optional ISO-8601 datetime that tolerates timezone offsets (e.g. NWS emits

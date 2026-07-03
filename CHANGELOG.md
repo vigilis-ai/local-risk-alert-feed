@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-07-03
+
+### Fixed
+- **`source.type: 'traffic'` no longer rejected.** `AlertSourceTypeSchema` was missing `'traffic'`, so it had drifted from the `AlertSourceType` type (which includes it) — traffic/transit plugins failed `PluginFetchResultSchema` validation. The enum now matches the type.
+- **Alert location fields accept `null`.** `AlertLocationSchema` optional strings (`address`, `city`, `state`, `zipCode`) rejected `null`, which some feeds emit for unknown values; they now accept `null` and normalize it to `undefined` (validated shape unchanged), matching the timestamp fix in 1.0.2.
+
 ## [1.0.2] - 2026-07-03
 
 ### Fixed
