@@ -61,13 +61,25 @@ export const AlertTemporalTypeSchema = z.enum(['historical', 'scheduled', 'real-
 export const AlertSourceTypeSchema = z.enum(['police', 'fire', 'weather', 'events', 'other']);
 
 /**
+ * Optional ISO-8601 datetime that tolerates timezone offsets (e.g. NWS emits
+ * "2026-07-03T14:00:00-04:00", not just UTC "…Z") and upstream nulls, which are
+ * common for open-ended alerts. `null` is normalized to `undefined` so the
+ * validated output still matches the `AlertTimestamps` interface (`?: string`).
+ */
+const optionalOffsetDateTime = z
+  .string()
+  .datetime({ offset: true })
+  .nullish()
+  .transform((v) => v ?? undefined);
+
+/**
  * Schema for alert timestamps.
  */
 export const AlertTimestampsSchema = z.object({
-  issued: z.string().datetime(),
-  eventStart: z.string().datetime().optional(),
-  eventEnd: z.string().datetime().optional(),
-  expires: z.string().datetime().optional(),
+  issued: z.string().datetime({ offset: true }),
+  eventStart: optionalOffsetDateTime,
+  eventEnd: optionalOffsetDateTime,
+  expires: optionalOffsetDateTime,
 });
 
 /**

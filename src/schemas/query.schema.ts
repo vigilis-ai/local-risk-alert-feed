@@ -24,8 +24,9 @@ export const TimeRangePresetSchema = z.enum([
  * Schema for explicit time range.
  */
 export const TimeRangeSchema = z.object({
-  start: z.string().datetime(),
-  end: z.string().datetime(),
+  // Tolerate timezone offsets (e.g. "…-04:00"), not just UTC "…Z".
+  start: z.string().datetime({ offset: true }),
+  end: z.string().datetime({ offset: true }),
 });
 
 /**

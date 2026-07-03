@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-07-03
+
+### Fixed
+- **Alert timestamps now accept timezone offsets and open-ended (`null`) times.** `AlertTimestampsSchema` (and `TimeRangeSchema`) validated datetimes as UTC-`Z`-only, so real upstream feeds that emit offset timestamps (e.g. NWS `2026-07-03T14:00:00-04:00`) and `null` for alerts with no end failed `PluginFetchResultSchema` validation — the host and `vigilis-plugin-verify` rejected otherwise-valid live alerts from weather, traffic, transit, air-quality, wildfire, and airport plugins. Datetimes now allow an offset, and the optional timestamp fields accept `null` (normalized to `undefined`, so the validated shape still matches `AlertTimestamps`). UTC `Z` remains valid and malformed values are still rejected.
+
 ## [1.0.1] - 2026-07-02
 
 ### Added
