@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-09
+
+### Fixed
+- **ArcGIS plugins no longer truncate away the most severe events in a window.** `glendale-police`, `glendale-fire`, `phoenix-fire`, `bend-police`, and `atlanta-crime` each issued a single query capped at `resultRecordCount`, ordered newest-first over a bounding box far larger than the requested radius, and applied the radius filter afterwards — client-side. On a busy feed the cap was reached long before the radius filter ran, so the oldest records in the window were discarded silently. Glendale runs ~360 calls/day: a `past-7d` query near Tanger Outlets matched 2,148 records against a 500 cap, which reached back only 1.5 days. The July 4 mass shooting 187m from the site ranked #1110 and never reached the caller. Each plugin now pages through the full result set with `resultOffset`, sizes its spatial envelope to the requested radius, and reports a `warnings` entry when a cap does stop the walk.
+- **`glendale-police` scored gunfire as low risk.** `CALL_TYPE_MAP` keyed on bare descriptions (`'SHOOTING'`), but GPD publishes code-prefixed values (`'901G-SHOOTING'`), so every exact lookup missed and classification fell through to substring guessing. `417S-SHOTS FIRED`, `417G-SUBJECT WITH A GUN` and `901C-CUTTING OR STABBING` scored `low` while `459A-BURGLARY ALARM` scored `high`. Classification is now keyed on the GPD call code, and a Priority-1 floor guarantees an unmapped life-threatening call is never reported as low risk.
+- **Police and fire timestamps were 7 hours early.** `IncidentDate` (Glendale PD) and `REPORTED` (Phoenix Fire) store local wall-clock time as epoch-as-if-UTC, so a 9pm shooting was emitted as `20:58Z` — 1:58pm local. This also corrupted `temporalType`, labelling live events `historical`. Both layers publish a true-UTC companion field (`DateTime_Plus7`, `REPORTED_UTC`), now used for filtering, ordering, and output. `DATE` literals in the where-clause additionally truncated the upper bound to midnight, excluding everything from the current day; bounds now use second-precision `TIMESTAMP` literals.
+- **`bend-police` returned nothing for any window older than the last 500 calls.** The layer holds ~441k rows; the plugin fetched the newest 500 with `where: 'OBJECTID > 0'` and filtered the time range client-side. `CreateDateTime` does accept `TIMESTAMP` literals, so the window is now enforced server-side, and the plugin gained the spatial filter it never had.
+- **Truncation and error warnings survived caching.** `warnings` was either declared and never written (`glendale-police`, `glendale-fire`, `phoenix-fire`, `bend-police`) or pushed into an array captured by the cached fetcher (`atlanta-crime`), so a cache hit dropped it. Warnings are now cached alongside the alerts.
+- **`glendale-police` dropped the emergency response.** `PrimaryUnitId`, `FirstUnitDispatchedTime`, `FirstUnitArrivedTime`, and `IncidentStatusDescription` were fetched and discarded; they now reach `metadata` and the alert description ("First unit on scene: 6 min after call").
+
+### Added
+- **`utils/arcgis`** — `fetchArcGisFeatures` (offset paging that reports `truncated`), `envelopeForRadius` (an envelope sized to the query radius rather than a fixed box), and `toArcGisTimestamp` (second-precision `TIMESTAMP` literal bodies).
+- `glendale-police` now emits `fire` and `medical` categories, which GPD dispatches (`904`, `901x`), and declares them in `supportedCategories`.
+
+### Changed
+- `limit` on the ArcGIS plugin configs is deprecated in favour of `pageSize` (records per request) and `maxRecords` (ceiling across all pages, default 5000). `limit` is still honoured as the page size, and no longer caps the overall result.
+
 ## [1.0.3] - 2026-07-03
 
 ### Fixed
