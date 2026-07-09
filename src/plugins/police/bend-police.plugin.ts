@@ -1,5 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel, AlertCategory } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from '../../utils/arcgis';
 
 /**
  * Bend Police call for service from ArcGIS service.
@@ -34,8 +35,16 @@ interface ArcGISResponse {
  * Bend Police plugin configuration.
  */
 export interface BendPolicePluginConfig extends BasePluginConfig {
-  /** Maximum records to fetch per request. Default: 500 */
+  /**
+   * Records requested per page. Default: 1000 (layer maxRecordCount is 2000).
+   * @deprecated Prefer `pageSize`; `limit` is honoured as the page size and no
+   * longer caps the overall result.
+   */
   limit?: number;
+  /** Records requested per page. Default: 1000. */
+  pageSize?: number;
+  /** Ceiling across all pages for one query. Default: 5000. */
+  maxRecords?: number;
   /** Include low-priority calls (parking, noise). Default: true */
   includeLowPriority?: boolean;
 }
@@ -148,7 +157,8 @@ export class BendPolicePlugin extends BasePlugin {
   constructor(config?: BendPolicePluginConfig) {
     super(config);
     this.policeConfig = {
-      limit: 500,
+      pageSize: config?.pageSize ?? config?.limit ?? 1000,
+      maxRecords: 5000,
       includeLowPriority: true,
       ...config,
     };
@@ -157,9 +167,10 @@ export class BendPolicePlugin extends BasePlugin {
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
     const { location, timeRange, radiusMeters, categories } = options;
     const cacheKey = this.generateCacheKey(options);
-    const warnings: string[] = [];
 
     try {
+      // Warnings are cached with the alerts; a cache hit that dropped them would
+      // report a truncated window as a complete one.
       const { data, fromCache } = await this.getCachedOrFetch(
         cacheKey,
         () => this.fetchCalls(location, timeRange, radiusMeters, categories),
@@ -167,10 +178,10 @@ export class BendPolicePlugin extends BasePlugin {
       );
 
       return {
-        alerts: data,
+        alerts: data.alerts,
         fromCache,
         cacheKey,
-        warnings: warnings.length > 0 ? warnings : undefined,
+        warnings: data.warnings.length > 0 ? data.warnings : undefined,
       };
     } catch (error) {
       console.error('Bend Police fetch error:', error);
@@ -186,39 +197,52 @@ export class BendPolicePlugin extends BasePlugin {
     timeRange: { start: string; end: string },
     radiusMeters: number,
     categories?: AlertCategory[]
-  ) {
+  ): Promise<{ alerts: ReturnType<BendPolicePlugin['transformCall']>[]; warnings: string[] }> {
     // Bend Police public calls for service
     const baseUrl = 'https://services5.arcgis.com/JisFYcK2mIVg9ueP/arcgis/rest/services/Public_Calls/FeatureServer/0/query';
 
-    // Build where clause - use OBJECTID > 0 since date filtering isn't supported
-    // We'll filter by time range client-side
-    const startDate = new Date(timeRange.start);
-    const endDate = new Date(timeRange.end);
-    const startTs = startDate.getTime();
-    const endTs = endDate.getTime();
+    const warnings: string[] = [];
 
+    const startTs = new Date(timeRange.start).getTime();
+    const endTs = new Date(timeRange.end).getTime();
+
+    // The layer holds ~440k rows. Fetching the newest 500 and filtering time
+    // client-side meant any window older than the last 500 calls came back
+    // empty. `CreateDateTime` is genuine UTC and does accept TIMESTAMP literals,
+    // despite the previous comment here claiming otherwise.
     const params = new URLSearchParams({
-      where: 'OBJECTID > 0',
+      where: `CreateDateTime >= TIMESTAMP '${toArcGisTimestamp(new Date(startTs))}' AND CreateDateTime <= TIMESTAMP '${toArcGisTimestamp(new Date(endTs))}'`,
       outFields: '*',
       f: 'json',
       outSR: '4326', // Request WGS84 coordinates
-      resultRecordCount: String(this.policeConfig.limit),
       orderByFields: 'CreateDateTime DESC',
+      geometry: envelopeForRadius(location.latitude, location.longitude, radiusMeters),
+      geometryType: 'esriGeometryEnvelope',
+      spatialRel: 'esriSpatialRelIntersects',
+      inSR: '4326',
     });
 
-    const url = `${baseUrl}?${params}`;
-    const response = await this.fetchJson<ArcGISResponse>(url);
+    const { features, truncated } = await fetchArcGisFeatures<ArcGISResponse['features'][number]>({
+      baseUrl,
+      params,
+      pageSize: this.policeConfig.pageSize!,
+      maxRecords: this.policeConfig.maxRecords!,
+      fetchJson: (url) => this.fetchJson(url),
+    });
 
-    if (!response.features) {
-      return [];
+    if (truncated) {
+      warnings.push(
+        `Bend PD returned more than ${this.policeConfig.maxRecords} calls for this window; ` +
+          `only the ${this.policeConfig.maxRecords} most recent were read. Narrow the time range or radius for complete results.`
+      );
     }
 
     // Transform and filter by location and time range
-    const alerts = response.features
+    const alerts = features
       .filter(f => {
         if (!f.geometry) return false;
 
-        // Filter by time range (client-side since ArcGIS doesn't support date filtering)
+        // Belt-and-braces: the window is now enforced server-side.
         const callTime = f.attributes.CreateDateTime;
         if (callTime < startTs || callTime > endTs) return false;
 
@@ -260,7 +284,7 @@ export class BendPolicePlugin extends BasePlugin {
         return this.transformCall(f.attributes, coords);
       });
 
-    return alerts;
+    return { alerts, warnings };
   }
 
   /**

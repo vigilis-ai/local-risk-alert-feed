@@ -1,5 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel, AlertCategory } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from '../../utils/arcgis';
 
 /**
  * Phoenix Fire incident from ArcGIS service.
@@ -13,7 +14,10 @@ interface PhoenixFireIncident {
   STATION: string;
   CATEGORY: string; // ALS, BLS, FIRE, etc.
   CLASSIFICATION: string;
-  REPORTED: number; // Unix timestamp in ms
+  /** Phoenix local time stored as epoch-as-if-UTC. Prefer `REPORTED_UTC`. */
+  REPORTED: number;
+  /** The same instant in real UTC (Arizona is UTC-7 year-round, no DST). */
+  REPORTED_UTC?: number;
   VILLAGE: string;
   FIRST_DUE: string;
   TYPE: string; // EMS, FIRE, SERVICE
@@ -42,8 +46,29 @@ export interface PhoenixFirePluginConfig extends BasePluginConfig {
   includeEMS?: boolean;
   /** Include service calls (non-emergency). Default: false */
   includeService?: boolean;
-  /** Maximum records to fetch per request. Default: 500 */
+  /**
+   * Records requested per page. Default: 1000 (layer maxRecordCount is 2000).
+   * @deprecated Prefer `pageSize`; `limit` is honoured as the page size and no
+   * longer caps the overall result.
+   */
   limit?: number;
+  /** Records requested per page. Default: 1000. */
+  pageSize?: number;
+  /** Ceiling across all pages for one query. Default: 5000. */
+  maxRecords?: number;
+}
+
+/**
+ * Arizona does not observe DST, so the layer's local-to-UTC offset is a constant
+ * +7h. Used only as a fallback: `REPORTED_UTC` carries the true instant.
+ */
+const PHOENIX_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** The true UTC instant an incident was reported, in epoch ms. */
+export function phoenixFireUtcInstant(incident: { REPORTED: number; REPORTED_UTC?: number }): number {
+  return typeof incident.REPORTED_UTC === 'number' && Number.isFinite(incident.REPORTED_UTC)
+    ? incident.REPORTED_UTC
+    : incident.REPORTED + PHOENIX_UTC_OFFSET_MS;
 }
 
 /**
@@ -117,7 +142,8 @@ export class PhoenixFirePlugin extends BasePlugin {
     this.fireConfig = {
       includeEMS: true,
       includeService: false,
-      limit: 500,
+      pageSize: config?.pageSize ?? config?.limit ?? 1000,
+      maxRecords: 5000,
       ...config,
     };
   }
@@ -125,9 +151,10 @@ export class PhoenixFirePlugin extends BasePlugin {
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
     const { location, timeRange, radiusMeters, categories } = options;
     const cacheKey = this.generateCacheKey(options);
-    const warnings: string[] = [];
 
     try {
+      // Warnings are cached with the alerts; a cache hit that dropped them would
+      // report a truncated window as a complete one.
       const { data, fromCache } = await this.getCachedOrFetch(
         cacheKey,
         () => this.fetchIncidents(location, timeRange, radiusMeters, categories),
@@ -135,10 +162,10 @@ export class PhoenixFirePlugin extends BasePlugin {
       );
 
       return {
-        alerts: data,
+        alerts: data.alerts,
         fromCache,
         cacheKey,
-        warnings: warnings.length > 0 ? warnings : undefined,
+        warnings: data.warnings.length > 0 ? data.warnings : undefined,
       };
     } catch (error) {
       console.error('Phoenix Fire fetch error:', error);
@@ -154,13 +181,17 @@ export class PhoenixFirePlugin extends BasePlugin {
     timeRange: { start: string; end: string },
     radiusMeters: number,
     categories?: AlertCategory[]
-  ) {
+  ): Promise<{ alerts: ReturnType<PhoenixFirePlugin['transformIncident']>[]; warnings: string[] }> {
     // Phoenix Fire 30-day incident history
     const baseUrl = 'https://maps.phoenix.gov/phxfire/rest/services/IncidentHistory30DayPoints/MapServer/0/query';
 
-    // Build where clause for time range using DATE format (required by this ArcGIS server)
-    const startDate = new Date(timeRange.start).toISOString().split('T')[0];
-    const endDate = new Date(timeRange.end).toISOString().split('T')[0];
+    const warnings: string[] = [];
+
+    // `REPORTED` is Phoenix local time stored as epoch-as-if-UTC; `REPORTED_UTC`
+    // is the true instant. A DATE literal also truncates the upper bound to
+    // midnight, excluding everything reported today.
+    const start = toArcGisTimestamp(new Date(timeRange.start));
+    const end = toArcGisTimestamp(new Date(timeRange.end));
 
     // Build type filter
     const typeFilters: string[] = ["TYPE='FIRE'"];
@@ -172,23 +203,35 @@ export class PhoenixFirePlugin extends BasePlugin {
     }
 
     const params = new URLSearchParams({
-      where: `REPORTED >= DATE '${startDate}' AND REPORTED <= DATE '${endDate}' AND (${typeFilters.join(' OR ')})`,
+      where: `REPORTED_UTC >= TIMESTAMP '${start}' AND REPORTED_UTC <= TIMESTAMP '${end}' AND (${typeFilters.join(' OR ')})`,
       outFields: '*',
       f: 'geojson',
       outSR: '4326',
-      resultRecordCount: String(this.fireConfig.limit),
-      orderByFields: 'REPORTED DESC',
+      orderByFields: 'REPORTED_UTC DESC',
+      // Previously unbounded: the whole city was fetched, then the newest N kept.
+      geometry: envelopeForRadius(location.latitude, location.longitude, radiusMeters),
+      geometryType: 'esriGeometryEnvelope',
+      spatialRel: 'esriSpatialRelIntersects',
+      inSR: '4326',
     });
 
-    const url = `${baseUrl}?${params}`;
-    const response = await this.fetchJson<ArcGISGeoJSONResponse>(url);
+    const { features, truncated } = await fetchArcGisFeatures<ArcGISGeoJSONResponse['features'][number]>({
+      baseUrl,
+      params,
+      pageSize: this.fireConfig.pageSize!,
+      maxRecords: this.fireConfig.maxRecords!,
+      fetchJson: (url) => this.fetchJson(url),
+    });
 
-    if (!response.features) {
-      return [];
+    if (truncated) {
+      warnings.push(
+        `Phoenix Fire returned more than ${this.fireConfig.maxRecords} incidents for this window; ` +
+          `only the ${this.fireConfig.maxRecords} most recent were read. Narrow the time range or radius for complete results.`
+      );
     }
 
     // Transform and filter by location
-    const alerts = response.features
+    const alerts = features
       .filter(f => {
         if (!f.geometry?.coordinates) return false;
 
@@ -207,7 +250,7 @@ export class PhoenixFirePlugin extends BasePlugin {
       })
       .map(f => this.transformIncident(f.properties, f.geometry.coordinates));
 
-    return alerts;
+    return { alerts, warnings };
   }
 
   /**
@@ -229,11 +272,14 @@ export class PhoenixFirePlugin extends BasePlugin {
     const [longitude, latitude] = coordinates;
     const { category, risk } = this.mapCategoryToRisk(incident.TYPE, incident.CATEGORY);
 
-    // Parse timestamp
-    const issued = new Date(incident.REPORTED).toISOString();
+    // `REPORTED` is local wall-clock stored as epoch-as-if-UTC, so using it
+    // directly shifted every incident 7 hours earlier and mislabelled live
+    // incidents as `historical`.
+    const reportedAtMs = phoenixFireUtcInstant(incident);
+    const issued = new Date(reportedAtMs).toISOString();
 
     // Determine if real-time (within last 24 hours)
-    const isRecent = Date.now() - incident.REPORTED < 24 * 60 * 60 * 1000;
+    const isRecent = Date.now() - reportedAtMs < 24 * 60 * 60 * 1000;
     const temporalType = isRecent ? 'real-time' : 'historical';
 
     // Build title

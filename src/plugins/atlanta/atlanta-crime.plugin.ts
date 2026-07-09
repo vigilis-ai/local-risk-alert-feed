@@ -1,5 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { fetchArcGisFeatures, envelopeForRadius } from '../../utils/arcgis';
 
 /**
  * Atlanta Police Department crime incident (NIBRS) from the
@@ -53,8 +54,16 @@ export interface AtlantaCrimePluginConfig extends BasePluginConfig {
   includeFamilyViolence?: boolean;
   /** Minimum risk level to include (filters out low-level offenses). Default: undefined (all) */
   minRiskLevel?: RiskLevel;
-  /** Maximum records to fetch per request. Default: 1000 */
+  /**
+   * Records requested per page. Default: 1000 (layer maxRecordCount is 2000).
+   * @deprecated Prefer `pageSize`; `limit` is honoured as the page size and no
+   * longer caps the overall result.
+   */
   limit?: number;
+  /** Records requested per page. Default: 1000. */
+  pageSize?: number;
+  /** Ceiling across all pages for one query. Default: 5000. */
+  maxRecords?: number;
 }
 
 /**
@@ -154,7 +163,8 @@ export class AtlantaCrimePlugin extends BasePlugin {
     super(config);
     this.crimeConfig = {
       includeFamilyViolence: true,
-      limit: 1000,
+      pageSize: config?.pageSize ?? config?.limit ?? 1000,
+      maxRecords: 5000,
       ...config,
     };
   }
@@ -162,20 +172,21 @@ export class AtlantaCrimePlugin extends BasePlugin {
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
     const { location, radiusMeters, timeRange } = options;
     const cacheKey = this.generateCacheKey(options);
-    const warnings: string[] = [];
 
     try {
+      // Warnings are cached with the alerts. Previously they were pushed into an
+      // array captured by the cached fetcher, so a cache hit silently dropped them.
       const { data, fromCache } = await this.getCachedOrFetch(
         cacheKey,
-        () => this.fetchCrimeReports(location, radiusMeters, timeRange, warnings),
+        () => this.fetchCrimeReports(location, radiusMeters, timeRange),
         this.config.cacheTtlMs
       );
 
       return {
-        alerts: data,
+        alerts: data.alerts,
         fromCache,
         cacheKey,
-        warnings: warnings.length > 0 ? warnings : undefined,
+        warnings: data.warnings.length > 0 ? data.warnings : undefined,
       };
     } catch (error) {
       console.error('Atlanta Crime fetch error:', error);
@@ -189,9 +200,9 @@ export class AtlantaCrimePlugin extends BasePlugin {
   private async fetchCrimeReports(
     location: { latitude: number; longitude: number },
     radiusMeters: number,
-    timeRange: { start: string; end: string },
-    warnings: string[]
-  ) {
+    timeRange: { start: string; end: string }
+  ): Promise<{ alerts: ReturnType<AtlantaCrimePlugin['transformIncident']>[]; warnings: string[] }> {
+    const warnings: string[] = [];
     const baseUrl =
       'https://services3.arcgis.com/Et5Qfajgiyosiw4d/arcgis/rest/services/OpenDataWebsite_Crime_view/FeatureServer/0/query';
 
@@ -205,20 +216,31 @@ export class AtlantaCrimePlugin extends BasePlugin {
       outFields: '*',
       f: 'geojson',
       outSR: '4326',
-      resultRecordCount: String(this.crimeConfig.limit),
       orderByFields: 'OccurredFromDate DESC',
+      // Previously unbounded: the whole city was fetched, then the newest N kept.
+      geometry: envelopeForRadius(location.latitude, location.longitude, radiusMeters),
+      geometryType: 'esriGeometryEnvelope',
+      spatialRel: 'esriSpatialRelIntersects',
+      inSR: '4326',
     });
 
-    const url = `${baseUrl}?${params}`;
-
     try {
-      const response = await this.fetchJson<ArcGISGeoJSONResponse>(url);
+      const { features, truncated } = await fetchArcGisFeatures<ArcGISGeoJSONResponse['features'][number]>({
+        baseUrl,
+        params,
+        pageSize: this.crimeConfig.pageSize!,
+        maxRecords: this.crimeConfig.maxRecords!,
+        fetchJson: (url) => this.fetchJson(url),
+      });
 
-      if (!response.features || !Array.isArray(response.features)) {
-        return [];
+      if (truncated) {
+        warnings.push(
+          `Atlanta PD returned more than ${this.crimeConfig.maxRecords} incidents for this window; ` +
+            `only the ${this.crimeConfig.maxRecords} most recent were read. Narrow the time range or radius for complete results.`
+        );
       }
 
-      const filtered = response.features.filter((f) => {
+      const filtered = features.filter((f) => {
         if (!f.geometry?.coordinates) return false;
         const [lng, lat] = f.geometry.coordinates;
         if (typeof lat !== 'number' || typeof lng !== 'number') return false;
@@ -245,12 +267,13 @@ export class AtlantaCrimePlugin extends BasePlugin {
         return true;
       });
 
-      return filtered.map((f) => this.transformIncident(f.properties, f.geometry!.coordinates));
+      const alerts = filtered.map((f) => this.transformIncident(f.properties, f.geometry!.coordinates));
+      return { alerts, warnings };
     } catch (error) {
       warnings.push(
         `Failed to fetch Atlanta crime reports: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
-      return [];
+      return { alerts: [], warnings };
     }
   }
 
