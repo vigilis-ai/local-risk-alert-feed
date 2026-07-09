@@ -27,3 +27,6 @@ export type { CacheKeyParams } from './cache';
 
 export { parseCSV, toCSV } from './csv';
 export type { CSVParseOptions } from './csv';
+
+export { fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from './arcgis';
+export type { ArcGisFetchOptions, ArcGisFetchResult } from './arcgis';

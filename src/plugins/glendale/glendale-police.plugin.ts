@@ -1,5 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel, AlertCategory } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from '../../utils/arcgis';
 
 /**
  * Glendale Police call for service from the GPD ArcGIS spatial layer.
@@ -9,13 +10,22 @@ import { BasePlugin, BasePluginConfig } from '../base-plugin';
 interface GlendalePoliceCall {
   OBJECTID: number;
   IncidentNumber: string;
-  IncidentDate: number; // Unix timestamp in ms
+  /**
+   * Phoenix local wall-clock time stored as epoch-as-if-UTC — a 9pm call is
+   * published as 20:58Z. Prefer `DateTime_Plus7` for the true instant.
+   */
+  IncidentDate: number;
+  /** The same instant in real UTC (Arizona is UTC-7 year-round, no DST). */
+  DateTime_Plus7?: number;
   IncidentTypeDescription: string;
   InitialIncidentTypeDescription?: string;
   IncidentTypeCode?: string;
+  IncidentStatusDescription?: string;
   CallSource?: string;
   CurrentPriorityKey?: number;
   Location?: string;
+  LocationName?: string;
+  CrossStreet?: string;
   CityName?: string;
   ZipCode?: string;
   BeatName?: string;
@@ -23,6 +33,11 @@ interface GlendalePoliceCall {
   SectorName?: string;
   Latitude?: number;
   Longitude?: number;
+  /** Unit response times, in the same local-as-UTC space as `IncidentDate`. */
+  FirstUnitDispatchedTime?: number;
+  FirstUnitEnrouteTime?: number;
+  FirstUnitArrivedTime?: number;
+  PrimaryUnitId?: string;
   AllDispositionDescriptions?: string;
   Council_District_GIS?: string;
   PATROL_DIVISION_GIS?: string;
@@ -47,8 +62,16 @@ interface ArcGISGeoJSONResponse {
  * Glendale Police plugin configuration.
  */
 export interface GlendalePolicePluginConfig extends BasePluginConfig {
-  /** Maximum records to fetch per request. Default: 500 */
+  /**
+   * Records requested per page. Default: 1000 (layer maxRecordCount is 16000).
+   * @deprecated Prefer `pageSize`; `limit` is honoured as the page size for
+   * backwards compatibility and no longer caps the overall result.
+   */
   limit?: number;
+  /** Records requested per page. Default: 1000. */
+  pageSize?: number;
+  /** Ceiling across all pages for one query. Default: 5000. */
+  maxRecords?: number;
   /** Include low-priority calls (noise, parking). Default: true */
   includeLowPriority?: boolean;
 }
@@ -67,75 +90,221 @@ const GLENDALE_CENTER = {
 const COVERAGE_RADIUS_METERS = 20_000;
 
 /**
- * Incident type description to risk level and category mapping.
- * Based on actual Glendale PD IncidentTypeDescription values.
+ * Arizona does not observe DST, so the layer's local-to-UTC offset is a constant
+ * +7h. Used only as a fallback: `DateTime_Plus7` carries the true instant and is
+ * populated on every record.
  */
-const CALL_TYPE_MAP: Record<string, { category: AlertCategory; risk: RiskLevel }> = {
-  // Violent crimes - severe/extreme
-  'ASSAULT': { category: 'crime', risk: 'severe' },
-  'AGGRAVATED ASSAULT': { category: 'crime', risk: 'extreme' },
-  'ROBBERY': { category: 'crime', risk: 'severe' },
-  'ARMED ROBBERY': { category: 'crime', risk: 'extreme' },
-  'SHOOTING': { category: 'crime', risk: 'extreme' },
-  'SHOTS FIRED': { category: 'crime', risk: 'extreme' },
-  'STABBING': { category: 'crime', risk: 'extreme' },
-  'HOMICIDE': { category: 'crime', risk: 'extreme' },
-  'KIDNAPPING': { category: 'crime', risk: 'extreme' },
-  'WEAPONS OFFENSE': { category: 'crime', risk: 'severe' },
-  'DOMESTIC VIOLENCE': { category: 'crime', risk: 'severe' },
+const PHOENIX_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
 
-  // Property crimes - high/moderate
-  'BURGLARY': { category: 'crime', risk: 'high' },
-  'RESIDENTIAL BURGLARY': { category: 'crime', risk: 'high' },
-  'COMMERCIAL BURGLARY': { category: 'crime', risk: 'high' },
-  'VEHICLE THEFT': { category: 'crime', risk: 'high' },
-  'THEFT': { category: 'crime', risk: 'moderate' },
-  'SHOPLIFTING': { category: 'crime', risk: 'low' },
-  'VANDALISM': { category: 'crime', risk: 'moderate' },
-  'CRIMINAL DAMAGE': { category: 'crime', risk: 'moderate' },
-  'TRESPASSING': { category: 'crime', risk: 'moderate' },
+/** The true UTC instant of a call, in epoch ms. */
+export function utcInstantOf(call: { IncidentDate: number; DateTime_Plus7?: number }): number {
+  return typeof call.DateTime_Plus7 === 'number' && Number.isFinite(call.DateTime_Plus7)
+    ? call.DateTime_Plus7
+    : call.IncidentDate + PHOENIX_UTC_OFFSET_MS;
+}
 
-  // Suspicious activity
-  'SUSPICIOUS PERSON': { category: 'crime', risk: 'moderate' },
-  'SUSPICIOUS VEHICLE': { category: 'crime', risk: 'moderate' },
-  'SUSPICIOUS ACTIVITY': { category: 'crime', risk: 'moderate' },
-  'PROWLER': { category: 'crime', risk: 'high' },
+/** Risk levels, ascending. */
+const RISK_ORDER: RiskLevel[] = ['low', 'moderate', 'high', 'severe', 'extreme'];
 
-  // Traffic related
-  'DUI': { category: 'traffic', risk: 'high' },
-  'HIT AND RUN': { category: 'traffic', risk: 'high' },
-  'TRAFFIC ACCIDENT': { category: 'traffic', risk: 'moderate' },
-  'ACCIDENT WITH INJURIES': { category: 'traffic', risk: 'high' },
-  'RECKLESS DRIVING': { category: 'traffic', risk: 'moderate' },
+function maxRisk(a: RiskLevel, b: RiskLevel): RiskLevel {
+  return RISK_ORDER.indexOf(a) >= RISK_ORDER.indexOf(b) ? a : b;
+}
 
-  // Disorder
-  'DISTURBANCE': { category: 'crime', risk: 'moderate' },
-  'FIGHT': { category: 'crime', risk: 'high' },
-  'DISORDERLY CONDUCT': { category: 'crime', risk: 'moderate' },
+/**
+ * GPD publishes `IncidentTypeDescription` as a call code joined to a description
+ * — `901G-SHOOTING`, `417S-SHOTS FIRED`, `10-70 PUBLIC RELATIONS CONTACT`. The
+ * code is the stable part, so classification keys on it.
+ *
+ * Matches, in order: the `10-xx` family (which embeds a dash), a numeric code
+ * with an optional letter suffix, and the alphabetic self-initiated codes.
+ */
+const CALL_CODE_RE = /^\s*(10-\d{2,3}|\d{2,4}[A-Z]{0,2}|C\d[A-Z]?|FC|BC|KNT|TEST)\b[\s\-(]*/;
 
-  // Low priority
-  'ALARM': { category: 'crime', risk: 'low' },
-  'NOISE COMPLAINT': { category: 'other', risk: 'low' },
-  'PARKING VIOLATION': { category: 'traffic', risk: 'low' },
-  'CIVIL MATTER': { category: 'other', risk: 'low' },
-  'WELFARE CHECK': { category: 'other', risk: 'moderate' },
-  'FOUND PROPERTY': { category: 'other', risk: 'low' },
-  'LOST PROPERTY': { category: 'other', risk: 'low' },
+export interface ParsedCallType {
+  /** Normalized call code, e.g. `901G`. Empty when the value carries no code. */
+  code: string;
+  /** The human-readable remainder, e.g. `SHOOTING`. */
+  text: string;
+}
+
+export function parseCallCode(callType: string | undefined | null): ParsedCallType {
+  const normalized = (callType ?? '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const match = CALL_CODE_RE.exec(normalized);
+  if (!match) return { code: '', text: normalized };
+  return { code: match[1], text: normalized.slice(match[0].length).trim() };
+}
+
+/**
+ * Call code → category and risk, from the codes GPD actually emits.
+ *
+ * The previous table keyed on bare descriptions (`'SHOOTING'`), which never
+ * matched a code-prefixed value, so every call fell through to substring
+ * guessing: `417S-SHOTS FIRED` and `417G-SUBJECT WITH A GUN` scored `low` while
+ * `459A-BURGLARY ALARM` scored `high` on the word "burglary".
+ */
+const CALL_CODE_MAP: Record<string, { category: AlertCategory; risk: RiskLevel }> = {
+  // Weapons and gunfire
+  '901G': { category: 'crime', risk: 'extreme' }, // SHOOTING
+  '998': { category: 'crime', risk: 'extreme' },  // OFFICER INVOLVED SHOOTING
+  '417S': { category: 'crime', risk: 'extreme' }, // SHOTS FIRED
+  '417X': { category: 'crime', risk: 'extreme' }, // SHOT SPOTTER (gunfire detection)
+  '417G': { category: 'crime', risk: 'extreme' }, // SUBJECT WITH A GUN
+  '417K': { category: 'crime', risk: 'severe' },  // SUBJECT WITH A KNIFE
+  '901C': { category: 'crime', risk: 'extreme' }, // CUTTING OR STABBING
+  '245': { category: 'crime', risk: 'extreme' },  // ASSAULT WITH DEADLY WEAPON
+
+  // Robbery and abduction
+  '211': { category: 'crime', risk: 'extreme' },  // ARMED ROBBERY
+  '211T': { category: 'crime', risk: 'severe' },  // PRO NET ACTIVATION (silent robbery alarm)
+  '211A': { category: 'crime', risk: 'severe' },  // ARMED ROBBERY ALARM
+  '210': { category: 'crime', risk: 'severe' },   // STRONG ARMED ROBBERY
+  '491': { category: 'crime', risk: 'extreme' },  // KIDNAPPING
+
+  // Violence against persons
+  '240': { category: 'crime', risk: 'severe' },   // ASSAULT
+  '239': { category: 'crime', risk: 'high' },     // FIGHT
+  '415F': { category: 'crime', risk: 'severe' },  // DOMESTIC VIOLENCE/FAMILY FIGHT
+  '261': { category: 'crime', risk: 'severe' },   // RAPE
+  '310': { category: 'crime', risk: 'severe' },   // MOLESTING
+  '312': { category: 'crime', risk: 'severe' },   // CHILD NEGLECT/ABUSE
+  '236': { category: 'crime', risk: 'high' },     // THREAT
+  '311': { category: 'crime', risk: 'moderate' }, // INDECENT EXPOSURE
+  '921P': { category: 'crime', risk: 'moderate' },// PEEPING TOM
+
+  // Medical / death
+  '901H': { category: 'medical', risk: 'severe' },   // DEAD BODY
+  '901X': { category: 'medical', risk: 'severe' },   // SUICIDE/ATTEMPT SUICIDE
+  '901D': { category: 'medical', risk: 'severe' },   // DROWNING
+  '901O': { category: 'medical', risk: 'high' },     // OVERDOSE
+  '901': { category: 'medical', risk: 'moderate' },  // INJURED OR SICK PERSON
+
+  // Fire
+  '904': { category: 'fire', risk: 'high' }, // FIRE
+
+  // Property crime
+  '459': { category: 'crime', risk: 'high' },     // BURGLARY
+  '459B': { category: 'crime', risk: 'high' },    // BURGLARY FROM BUSINESS
+  '459R': { category: 'crime', risk: 'high' },    // BURGLARY FROM RESIDENCE
+  '459X': { category: 'crime', risk: 'moderate' },// ATTEMPTED BURGLARY
+  '459M': { category: 'crime', risk: 'moderate' },// BURGLARY OF METAL
+  '459F': { category: 'crime', risk: 'moderate' },// BURGLARY FROM VEHICLE
+  '487V': { category: 'crime', risk: 'high' },    // STOLEN VEHICLE
+  '487': { category: 'crime', risk: 'moderate' }, // THEFT
+  '487F': { category: 'crime', risk: 'moderate' },// THEFT FROM VEHICLE
+  '487B': { category: 'crime', risk: 'low' },     // SHOPLIFTING
+  '415B': { category: 'crime', risk: 'moderate' },// CRIMINAL DAMAGE
+  '415G': { category: 'crime', risk: 'low' },     // GRAFFITI
+
+  // Alarms — frequently false; must not outrank gunfire.
+  '459A': { category: 'crime', risk: 'low' },     // BURGLARY ALARM SILENT/AUDIBLE
+  '459P': { category: 'crime', risk: 'high' },    // PANIC ALARM
+
+  // Disorder and suspicion
+  '647': { category: 'crime', risk: 'moderate' },  // SUSPICIOUS PERSON/ACTIVITY
+  '647V': { category: 'crime', risk: 'moderate' }, // SUSPICIOUS VEHICLE
+  '415': { category: 'crime', risk: 'moderate' },  // SUBJECT DISTURBING
+  '418T': { category: 'crime', risk: 'moderate' }, // TRESPASSING
+  '927': { category: 'crime', risk: 'moderate' },  // UNKNOWN TROUBLE
+  '918': { category: 'other', risk: 'moderate' },  // CRAZY/INSANE PERSON
+  '417F': { category: 'other', risk: 'low' },      // FIREWORKS
+  '415E': { category: 'other', risk: 'low' },      // LOUD MUSIC/NOISE DISTURBANCE
+  '900': { category: 'other', risk: 'moderate' },  // CHECK WELFARE
+
+  // Traffic
+  '962': { category: 'traffic', risk: 'high' },     // ACCIDENT - INJURIES
+  '962H': { category: 'traffic', risk: 'high' },    // HIT AND RUN - INJURIES
+  '963H': { category: 'traffic', risk: 'severe' },  // HIT AND RUN - FATALITY
+  '961': { category: 'traffic', risk: 'moderate' }, // ACCIDENT - NO INJURIES
+  '961H': { category: 'traffic', risk: 'moderate' },// HIT AND RUN - NO INJURIES
+  '390D': { category: 'traffic', risk: 'high' },    // DRUNK DRIVER
+  '510R': { category: 'traffic', risk: 'high' },    // ROAD RAGE
+  '510': { category: 'traffic', risk: 'moderate' }, // SPEEDING OR RACING VEHICLE
+  '510D': { category: 'traffic', risk: 'moderate' },// DRAG RACING
+  '585': { category: 'traffic', risk: 'moderate' }, // TRAFFIC HAZARD
+  '586': { category: 'traffic', risk: 'low' },      // ILLEGAL PARKING
+  '917': { category: 'traffic', risk: 'low' },      // ABANDONED VEHICLE
 };
 
 /**
- * Low priority call types that can be filtered out.
+ * Self-initiated, administrative, and clerical call codes. These are activity
+ * records rather than hazards, and can be filtered out entirely.
  */
-const LOW_PRIORITY_TYPES = new Set([
-  'ALARM',
-  'NOISE COMPLAINT',
-  'PARKING VIOLATION',
-  'CIVIL MATTER',
-  'FOUND PROPERTY',
-  'LOST PROPERTY',
-  'INFORMATION',
-  'ABANDONED VEHICLE',
+const LOW_PRIORITY_CODES = new Set([
+  'C5', 'C6', 'C6M', 'C6I', 'FC', 'BC', 'KNT', 'TEST',
+  '10-51', '10-52', '10-53', '10-70', '10-79', '10-84', '10-85', '10-86', '10-87',
+  '1025', '1076', '1090', '1091',
+  '319', '459A', '508', '586', '711', '907', '917', '928', '928I', '928N', '990',
 ]);
+
+export function isLowPriorityCallType(callType: string | undefined | null): boolean {
+  const { code, text } = parseCallCode(callType);
+  if (code && LOW_PRIORITY_CODES.has(code)) return true;
+  return !code && (text === 'PAPERWORK' || text.startsWith('CAT TEAM'));
+}
+
+/**
+ * Classify a GPD call into a category and risk level.
+ *
+ * Falls back to substring matching for codes not yet in the map, then applies a
+ * priority floor: GPD Priority 1 means life-threatening, so an unmapped P1 code
+ * can never be reported as low risk.
+ */
+export function classifyCallType(
+  callType: string | undefined | null,
+  priorityKey?: number,
+): { category: AlertCategory; risk: RiskLevel } {
+  const { code, text } = parseCallCode(callType);
+
+  let result = code ? CALL_CODE_MAP[code] : undefined;
+
+  if (!result) {
+    result = classifyByText(text || code);
+  }
+
+  // A Priority 1 call is dispatched as life-threatening. Never downgrade it.
+  const risk = priorityKey === 1 ? maxRisk(result.risk, 'severe') : result.risk;
+  return { category: result.category, risk };
+}
+
+function classifyByText(text: string): { category: AlertCategory; risk: RiskLevel } {
+  const lower = text.toLowerCase();
+
+  if (/shoot|homicide|stabbing|cutting|gun|weapon|kidnap/.test(lower)) {
+    return { category: 'crime', risk: 'extreme' };
+  }
+  if (/assault|robbery|rape|abuse/.test(lower)) {
+    return { category: 'crime', risk: 'severe' };
+  }
+  if (/dead body|suicide|drowning/.test(lower)) {
+    return { category: 'medical', risk: 'severe' };
+  }
+  if (/overdose|injured|sick person/.test(lower)) {
+    return { category: 'medical', risk: 'high' };
+  }
+  if (/fire(?!works)/.test(lower)) {
+    return { category: 'fire', risk: 'high' };
+  }
+  // "alarm" first: a burglary alarm is not a burglary.
+  if (/alarm/.test(lower)) {
+    return { category: 'crime', risk: 'low' };
+  }
+  if (/burglary|stolen vehicle/.test(lower)) {
+    return { category: 'crime', risk: 'high' };
+  }
+  if (/theft|fight|threat/.test(lower)) {
+    return { category: 'crime', risk: 'moderate' };
+  }
+  if (/hit and run|drunk driver|accident/.test(lower)) {
+    return { category: 'traffic', risk: 'moderate' };
+  }
+  if (/traffic|parking|vehicle|motorist/.test(lower)) {
+    return { category: 'traffic', risk: 'low' };
+  }
+  if (/suspicious|disturb|dispute|trespass/.test(lower)) {
+    return { category: 'crime', risk: 'moderate' };
+  }
+  return { category: 'crime', risk: 'low' };
+}
 
 /**
  * Plugin that fetches police calls for service from Glendale, AZ Police Department.
@@ -164,7 +333,8 @@ export class GlendalePolicePlugin extends BasePlugin {
       freshnessDescription: '~24 hour delay',
     },
     supportedTemporalTypes: ['historical', 'real-time'],
-    supportedCategories: ['crime', 'traffic', 'other'],
+    // GPD dispatches fire (904) and medical (901x) calls too.
+    supportedCategories: ['crime', 'traffic', 'fire', 'medical', 'other'],
     refreshIntervalMs: 5 * 60 * 1000, // 5 minutes
     defaultRadiusMeters: 10_000,
   };
@@ -174,7 +344,8 @@ export class GlendalePolicePlugin extends BasePlugin {
   constructor(config?: GlendalePolicePluginConfig) {
     super(config);
     this.policeConfig = {
-      limit: 500,
+      pageSize: config?.pageSize ?? config?.limit ?? 1000,
+      maxRecords: 5000,
       includeLowPriority: true,
       ...config,
     };
@@ -183,9 +354,10 @@ export class GlendalePolicePlugin extends BasePlugin {
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
     const { location, timeRange, radiusMeters, categories } = options;
     const cacheKey = this.generateCacheKey(options);
-    const warnings: string[] = [];
 
     try {
+      // Cache the warnings alongside the alerts: a cache hit that dropped the
+      // warning would report a truncated window as a complete one.
       const { data, fromCache } = await this.getCachedOrFetch(
         cacheKey,
         () => this.fetchCalls(location, timeRange, radiusMeters, categories),
@@ -193,10 +365,10 @@ export class GlendalePolicePlugin extends BasePlugin {
       );
 
       return {
-        alerts: data,
+        alerts: data.alerts,
         fromCache,
         cacheKey,
-        warnings: warnings.length > 0 ? warnings : undefined,
+        warnings: data.warnings.length > 0 ? data.warnings : undefined,
       };
     } catch (error) {
       console.error('Glendale Police fetch error:', error);
@@ -206,41 +378,60 @@ export class GlendalePolicePlugin extends BasePlugin {
 
   /**
    * Fetch calls for service from Glendale PD ArcGIS spatial layer.
+   *
+   * Pages through the whole window rather than taking the newest N. The old
+   * single-request form asked for the newest 500 rows across a fixed ~22km box;
+   * Glendale runs ~360 calls/day, so any window past ~1.5 days truncated before
+   * the radius filter ran, discarding the oldest — and often most severe —
+   * events. Anything still dropped by `maxRecords` is reported as a warning.
    */
   private async fetchCalls(
     location: { latitude: number; longitude: number },
     timeRange: { start: string; end: string },
     radiusMeters: number,
     categories?: AlertCategory[]
-  ) {
+  ): Promise<{ alerts: ReturnType<GlendalePolicePlugin['transformCall']>[]; warnings: string[] }> {
     // Glendale PD public calls for service - spatial layer with point geometry
     const baseUrl = 'https://services1.arcgis.com/9fVTQQSiODPjLUTa/ArcGIS/rest/services/P1_CFS_REDACTED_PT_hosted/FeatureServer/47/query';
 
-    const startDate = new Date(timeRange.start).toISOString().split('T')[0];
-    const endDate = new Date(timeRange.end).toISOString().split('T')[0];
+    const warnings: string[] = [];
+
+    // `IncidentDate` holds local wall-clock as-if-UTC, so filtering it against a
+    // real UTC instant is off by 7 hours. `DateTime_Plus7` is the true instant
+    // (non-null across the layer), and TIMESTAMP literals keep the bounds exact —
+    // a DATE literal truncates to midnight and drops everything from today.
+    const start = toArcGisTimestamp(new Date(timeRange.start));
+    const end = toArcGisTimestamp(new Date(timeRange.end));
 
     const params = new URLSearchParams({
-      where: `IncidentDate >= DATE '${startDate}' AND IncidentDate <= DATE '${endDate}'`,
+      where: `DateTime_Plus7 >= TIMESTAMP '${start}' AND DateTime_Plus7 <= TIMESTAMP '${end}'`,
       outFields: '*',
       f: 'geojson',
       outSR: '4326',
-      resultRecordCount: String(this.policeConfig.limit),
-      orderByFields: 'IncidentDate DESC',
-      // Spatial filter: bounding box around query location
-      geometry: `${location.longitude - 0.12},${location.latitude - 0.09},${location.longitude + 0.12},${location.latitude + 0.09}`,
+      orderByFields: 'DateTime_Plus7 DESC',
+      // Spatial filter sized to the caller's radius, not a fixed city-wide box.
+      geometry: envelopeForRadius(location.latitude, location.longitude, radiusMeters),
       geometryType: 'esriGeometryEnvelope',
       spatialRel: 'esriSpatialRelIntersects',
       inSR: '4326',
     });
 
-    const url = `${baseUrl}?${params}`;
-    const response = await this.fetchJson<ArcGISGeoJSONResponse>(url);
+    const { features, truncated } = await fetchArcGisFeatures<ArcGISGeoJSONResponse['features'][number]>({
+      baseUrl,
+      params,
+      pageSize: this.policeConfig.pageSize!,
+      maxRecords: this.policeConfig.maxRecords!,
+      fetchJson: (url) => this.fetchJson(url),
+    });
 
-    if (!response.features) {
-      return [];
+    if (truncated) {
+      warnings.push(
+        `Glendale PD returned more than ${this.policeConfig.maxRecords} calls for this window; ` +
+          `only the ${this.policeConfig.maxRecords} most recent were read. Narrow the time range or radius for complete results.`
+      );
     }
 
-    return response.features
+    const alerts = features
       .filter(f => {
         if (!f.geometry?.coordinates) return false;
 
@@ -251,37 +442,20 @@ export class GlendalePolicePlugin extends BasePlugin {
 
         // Filter low priority if configured
         if (!this.policeConfig.includeLowPriority) {
-          const callType = (f.properties.IncidentTypeDescription ?? '').toUpperCase();
-          if (LOW_PRIORITY_TYPES.has(callType)) return false;
+          if (isLowPriorityCallType(f.properties.IncidentTypeDescription)) return false;
         }
 
         // Filter by categories if specified
         if (categories && categories.length > 0) {
-          const callType = (f.properties.IncidentTypeDescription ?? '').toUpperCase();
-          const alertCategory = this.mapCallTypeToCategory(callType);
-          if (!categories.includes(alertCategory)) return false;
+          const { category } = classifyCallType(f.properties.IncidentTypeDescription, f.properties.CurrentPriorityKey);
+          if (!categories.includes(category)) return false;
         }
 
         return true;
       })
       .map(f => this.transformCall(f.properties, f.geometry.coordinates));
-  }
 
-  /**
-   * Map call type to alert category.
-   */
-  private mapCallTypeToCategory(callType: string): AlertCategory {
-    const mapping = CALL_TYPE_MAP[callType];
-    if (mapping) return mapping.category;
-
-    const lowerType = callType.toLowerCase();
-    if (lowerType.includes('traffic') || lowerType.includes('accident') || lowerType.includes('dui')) {
-      return 'traffic';
-    }
-    if (lowerType.includes('fire') || lowerType.includes('medic')) {
-      return 'fire';
-    }
-    return 'crime';
+    return { alerts, warnings };
   }
 
   /**
@@ -292,18 +466,28 @@ export class GlendalePolicePlugin extends BasePlugin {
     coordinates: [number, number]
   ) {
     const [longitude, latitude] = coordinates;
-    const callType = (call.IncidentTypeDescription ?? 'UNKNOWN').toUpperCase();
-    const { category, risk } = this.mapCallTypeToRisk(callType);
+    const { category, risk } = classifyCallType(call.IncidentTypeDescription, call.CurrentPriorityKey);
 
-    const issued = new Date(call.IncidentDate).toISOString();
+    // `IncidentDate` is local wall-clock stored as epoch-as-if-UTC, so emitting
+    // it directly shifted every call 7 hours earlier — a 9pm shooting published
+    // as 1:58pm — which also mislabelled live events as `historical`.
+    const occurredAtMs = utcInstantOf(call);
+    const issued = new Date(occurredAtMs).toISOString();
 
-    const isRecent = Date.now() - call.IncidentDate < 24 * 60 * 60 * 1000;
+    const isRecent = Date.now() - occurredAtMs < 24 * 60 * 60 * 1000;
     const temporalType = isRecent ? 'real-time' : 'historical';
+
+    // Unit times share `IncidentDate`'s local-as-UTC space; shift them the same way.
+    const offsetMs = occurredAtMs - call.IncidentDate;
+    const shift = (value?: number) =>
+      typeof value === 'number' && Number.isFinite(value)
+        ? new Date(value + offsetMs).toISOString()
+        : undefined;
 
     return this.createAlert({
       id: `glendale-police-${call.IncidentNumber}`,
       externalId: call.IncidentNumber,
-      title: this.formatCallType(call.IncidentTypeDescription ?? callType),
+      title: this.formatCallType(call.IncidentTypeDescription),
       description: this.buildDescription(call),
       riskLevel: risk,
       priority: this.riskLevelToPriority(risk),
@@ -326,48 +510,30 @@ export class GlendalePolicePlugin extends BasePlugin {
         initialCallType: call.InitialIncidentTypeDescription,
         priority: call.CurrentPriorityKey,
         callSource: call.CallSource,
+        status: call.IncidentStatusDescription,
+        locationName: call.LocationName,
+        crossStreet: call.CrossStreet,
         beat: call.BeatName,
         area: call.AreaName,
         sector: call.SectorName,
         disposition: call.AllDispositionDescriptions,
         patrolDivision: call.PATROL_DIVISION_GIS,
+        // Emergency response, previously dropped entirely.
+        primaryUnit: call.PrimaryUnitId,
+        dispatchedAt: shift(call.FirstUnitDispatchedTime),
+        enrouteAt: shift(call.FirstUnitEnrouteTime),
+        arrivedAt: shift(call.FirstUnitArrivedTime),
       },
     });
   }
 
   /**
-   * Map call type to risk level.
+   * Format call type for display, dropping the GPD code: `901G-SHOOTING` → `Shooting`.
    */
-  private mapCallTypeToRisk(callType: string): { category: AlertCategory; risk: RiskLevel } {
-    const mapping = CALL_TYPE_MAP[callType];
-    if (mapping) return mapping;
-
-    const lowerType = callType.toLowerCase();
-
-    if (lowerType.includes('shooting') || lowerType.includes('homicide') || lowerType.includes('stabbing')) {
-      return { category: 'crime', risk: 'extreme' };
-    }
-    if (lowerType.includes('assault') || lowerType.includes('robbery') || lowerType.includes('weapon')) {
-      return { category: 'crime', risk: 'severe' };
-    }
-    if (lowerType.includes('burglary') || lowerType.includes('theft') || lowerType.includes('dui')) {
-      return { category: 'crime', risk: 'high' };
-    }
-    if (lowerType.includes('suspicious') || lowerType.includes('disturbance') || lowerType.includes('dispute')) {
-      return { category: 'crime', risk: 'moderate' };
-    }
-    if (lowerType.includes('accident') || lowerType.includes('traffic')) {
-      return { category: 'traffic', risk: 'moderate' };
-    }
-
-    return { category: 'crime', risk: 'low' };
-  }
-
-  /**
-   * Format call type for display.
-   */
-  private formatCallType(callType: string): string {
-    return callType
+  private formatCallType(callType: string | undefined | null): string {
+    const { code, text } = parseCallCode(callType);
+    const label = text || code || 'Unknown';
+    return label
       .split(/[\s_]+/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ')
@@ -387,11 +553,25 @@ export class GlendalePolicePlugin extends BasePlugin {
     }
 
     if (call.Location) {
-      parts.push(`Location: ${call.Location}`);
+      parts.push(`Location: ${call.Location}${call.LocationName ? ` (${call.LocationName})` : ''}`);
     }
 
     if (call.CurrentPriorityKey) {
-      parts.push(`Priority: ${call.CurrentPriorityKey}`);
+      parts.push(`Priority: ${call.CurrentPriorityKey}${call.CurrentPriorityKey === 1 ? ' (life-threatening)' : ''}`);
+    }
+
+    if (call.IncidentStatusDescription) {
+      parts.push(`Status: ${call.IncidentStatusDescription}`);
+    }
+
+    // Response times tell a guard whether units are still on scene.
+    if (call.FirstUnitArrivedTime) {
+      const responseMs = call.FirstUnitArrivedTime - call.IncidentDate;
+      if (responseMs >= 0) {
+        parts.push(`First unit on scene: ${Math.round(responseMs / 60000)} min after call${call.PrimaryUnitId ? ` (${call.PrimaryUnitId})` : ''}`);
+      }
+    } else if (call.FirstUnitDispatchedTime) {
+      parts.push('Units dispatched; no arrival recorded');
     }
 
     if (call.BeatName) {
