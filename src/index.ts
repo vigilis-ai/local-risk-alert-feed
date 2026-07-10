@@ -137,7 +137,7 @@ export { parseCSV, toCSV } from './utils';
 export type { CSVParseOptions } from './utils';
 
 // ArcGIS helpers (for custom plugins backed by an ArcGIS FeatureServer/MapServer)
-export { fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from './utils';
+export { ArcGisQueryError, fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from './utils';
 export type { ArcGisFetchOptions, ArcGisFetchResult } from './utils';
 
 // Federation — host-side clients for plugins that live behind HTTP endpoints

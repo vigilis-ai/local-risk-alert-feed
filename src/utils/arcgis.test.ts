@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from './arcgis';
+import { ArcGisQueryError, fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from './arcgis';
 
 /** Builds a fake ArcGIS layer of `total` features that honours offset/count. */
 function makeLayer(total: number, opts: { flag?: boolean } = {}) {
@@ -170,5 +170,31 @@ describe('toArcGisTimestamp', () => {
 
   it('keeps the time component so today is not excluded', () => {
     expect(toArcGisTimestamp(new Date('2026-07-09T20:00:00.000Z'))).toBe('2026-07-09 20:00:00');
+  });
+});
+
+describe('fetchArcGisFeatures — upstream failures', () => {
+  const base = { baseUrl: 'https://x/query', params: new URLSearchParams({ orderByFields: 'd DESC' }), pageSize: 1000, maxRecords: 5000 };
+
+  it('throws on an ArcGIS error body served with HTTP 200', async () => {
+    // A bad query returns { error: {...} } and no `features` key, with a 200 status.
+    const fetchJson = async <T,>(): Promise<T> =>
+      ({ error: { code: 400, message: '', details: ["'Invalid field: BOGUS' parameter is invalid"] } }) as T;
+
+    await expect(fetchArcGisFeatures({ ...base, fetchJson })).rejects.toThrow(ArcGisQueryError);
+    // Previously this resolved to { features: [], truncated: false } — an upstream
+    // outage was reported to the caller as "no incidents near this site".
+    await expect(fetchArcGisFeatures({ ...base, fetchJson })).rejects.toThrow(/Invalid field: BOGUS/);
+  });
+
+  it('throws when a page omits the features array entirely', async () => {
+    const fetchJson = async <T,>(): Promise<T> => ({}) as T;
+    await expect(fetchArcGisFeatures({ ...base, fetchJson })).rejects.toThrow(/no `features` array/);
+  });
+
+  it('still resolves normally for a genuinely empty result set', async () => {
+    const fetchJson = async <T,>(): Promise<T> => ({ features: [] }) as T;
+    const out = await fetchArcGisFeatures({ ...base, fetchJson });
+    expect(out).toMatchObject({ features: [], truncated: false, pagesFetched: 1 });
   });
 });

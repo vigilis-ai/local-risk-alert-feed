@@ -21,6 +21,37 @@ interface ArcGisPagedResponse<F> {
   features?: F[];
   exceededTransferLimit?: boolean;
   properties?: { exceededTransferLimit?: boolean };
+  /** ArcGIS reports failures in the body with HTTP 200 — see {@link assertNotAnError}. */
+  error?: { code?: number; message?: string; details?: string[] };
+}
+
+/** An ArcGIS query that failed in the response body rather than the status line. */
+export class ArcGisQueryError extends Error {
+  constructor(
+    readonly code: number | undefined,
+    readonly details: string[],
+  ) {
+    super(
+      `ArcGIS query failed (code ${code ?? 'unknown'})` +
+        (details.length > 0 ? `: ${details.join('; ')}` : ''),
+    );
+    this.name = 'ArcGisQueryError';
+  }
+}
+
+/**
+ * ArcGIS answers a bad query with HTTP 200 and `{ "error": {...} }` — no
+ * `features` key at all. Coercing that to an empty page turns an upstream
+ * failure into "no incidents near this site", which is indistinguishable from a
+ * genuinely quiet feed. Fail loudly instead.
+ */
+function assertNotAnError<F>(response: ArcGisPagedResponse<F> | undefined | null): asserts response is ArcGisPagedResponse<F> {
+  if (response?.error) {
+    throw new ArcGisQueryError(response.error.code, response.error.details ?? []);
+  }
+  if (!Array.isArray(response?.features)) {
+    throw new ArcGisQueryError(undefined, ['response contained no `features` array']);
+  }
 }
 
 export interface ArcGisFetchOptions {
@@ -76,10 +107,12 @@ export async function fetchArcGisFeatures<F>(
     const response = await fetchJson<ArcGisPagedResponse<F>>(`${baseUrl}?${pageParams}`);
     pagesFetched++;
 
-    const page = response?.features ?? [];
+    assertNotAnError(response);
+
+    const page = response.features ?? [];
     features.push(...page);
 
-    if (!hasMorePages(response ?? {}, requested, page.length)) {
+    if (!hasMorePages(response, requested, page.length)) {
       return { features, truncated: false, pagesFetched };
     }
 
