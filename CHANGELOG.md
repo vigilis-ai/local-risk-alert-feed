@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-10
+
+### Added
+- **`phoenix-regional-active-incidents` — the only public feed that covers Glendale Fire Department.** The 30-day history layers are scoped to Phoenix (`CITY IN ('PHX','PDV','LAV')`) and Maricopa County (`'MAR'`), and Glendale's own dataset (`FIRE_UNIT_RELIABILITY_DASHBOARD_PT_Query`, 289k geolocated incident records) stopped receiving rows on 2025-07-14 with zero entries for 2026 — so `glendale-fire` can only ever return Phoenix mutual-aid responses. Phoenix Regional Dispatch's `Active_Incidents__Public` layer carries `GLN` alongside `PHX`/`TMP`/`SUR` and the rest of the Valley automatic-aid system. It holds only incidents units are actively committed to, so the plugin serves `real-time` alerts, does not filter by time (an incident that began before the window may still have units on scene), and classifies an unknown nature as `moderate` rather than `low`. Its `Date` field is genuine UTC, unlike `REPORTED` on the sibling history layers.
+- The ArcGIS helpers (`fetchArcGisFeatures`, `envelopeForRadius`, `toArcGisTimestamp`) are now exported from the package root, so out-of-tree and federated plugins can build on the same paging and envelope logic.
+
+### Fixed
+- **`atlanta-crime` anchored alerts to when a crime was reported, not when it happened.** `issued` came from `ReportDate` while the query window filters on `OccurredFromDate`, and APD publishes ~4% of incidents with a report date preceding the occurrence date (165 of 4,291 over 30 days). Those alerts carried an `issued` outside the requested window — and `issued` is what the aggregator dedupes and sorts on, and what a consumer reads as "when this happened". `issued`/`eventStart` now anchor on the occurrence, matching every other police plugin; the report date is preserved as `metadata.reportedAt`, records reported before they occurred are flagged with `metadata.reportedBeforeOccurrence`, and `eventEnd` is clamped so an inverted occurrence window can't end before it starts.
+
 ## [1.1.1] - 2026-07-10
 
 ### Fixed
