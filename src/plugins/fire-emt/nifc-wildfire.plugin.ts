@@ -1,6 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
-import { fetchArcGisFeatures, envelopeForRadius } from '../../utils/arcgis';
+import { fetchArcGisFeatures, envelopeForRadius } from '../../utils';
 
 /**
  * NIFC wildfire incident structure.

@@ -16,6 +16,7 @@ import { MTAAlertsPlugin } from './mta';
 import { FAAAirportStatusPlugin } from './airport';
 import { TRANSCOMPlugin } from './transcom';
 import { PhoenixCrimeRiskPlugin } from './phoenix-crime';
+import { PhoenixRegionalActiveIncidentsPlugin } from './phoenix-regional';
 
 /**
  * Options for {@link createDefaultPlugins}. Each key falls back to the matching
@@ -66,6 +67,8 @@ export function createDefaultPlugins(options: DefaultPluginsOptions = {}): Plugi
     new PhoenixConventionCenterPlugin(),
     new ArizonaTrafficPlugin(),
     new PhoenixCrimeRiskPlugin(),
+    // The only public feed covering Glendale FD; live incidents only.
+    new PhoenixRegionalActiveIncidentsPlugin(),
 
     // Bend, OR
     new BendPolicePlugin(),

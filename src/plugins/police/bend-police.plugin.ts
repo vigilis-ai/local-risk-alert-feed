@@ -1,6 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel, AlertCategory } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
-import { fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from '../../utils/arcgis';
+import { fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from '../../utils';
 
 /**
  * Bend Police call for service from ArcGIS service.

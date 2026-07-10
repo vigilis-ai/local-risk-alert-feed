@@ -23,6 +23,9 @@ export type {
 export { PhoenixCrimeRiskPlugin } from './phoenix-crime';
 export type { PhoenixCrimeRiskPluginConfig } from './phoenix-crime';
 
+export { PhoenixRegionalActiveIncidentsPlugin } from './phoenix-regional';
+export type { PhoenixRegionalActiveIncidentsPluginConfig } from './phoenix-regional';
+
 // Weather plugins
 export { NWSWeatherPlugin, classifyNwsEvent } from './weather';
 export type { NWSWeatherPluginConfig } from './weather';
