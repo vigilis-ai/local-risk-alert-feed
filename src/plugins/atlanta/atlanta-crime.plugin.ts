@@ -1,6 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
-import { fetchArcGisFeatures, envelopeForRadius } from '../../utils/arcgis';
+import { fetchArcGisFeatures, envelopeForRadius } from '../../utils';
 
 /**
  * Atlanta Police Department crime incident (NIBRS) from the
@@ -29,6 +29,44 @@ interface AtlantaCrimeIncident {
   NPU?: string;
   NhoodName?: string;
   GAFamilyViolenceIndicator?: string; // "YES" | "NO"
+}
+
+/** Timestamps for an APD incident, anchored to when the crime occurred. */
+export interface AtlantaTimestamps {
+  /** When the crime happened (or began). The alert's `issued` and `eventStart`. */
+  occurredFrom: number;
+  /** End of the occurrence window; never earlier than `occurredFrom`. */
+  occurredTo: number;
+  /** When APD filed the report. Preserved, but not used as the timeline anchor. */
+  reportedAt?: number;
+  /** The feed says this was reported before it happened — a known ~4% data artifact. */
+  reportedBeforeOccurrence: boolean;
+}
+
+/**
+ * Resolve an APD incident's timestamps.
+ *
+ * `OccurredFromDate` is what the query window filters on and what a guard cares
+ * about ("what happened near the site this week"), so it anchors the alert.
+ * `ReportDate` used to drive `issued`, which put ~4% of alerts outside the
+ * requested window — APD publishes records with a report date preceding the
+ * occurrence date. A handful also carry `OccurredToDate` before
+ * `OccurredFromDate`, so the end is clamped rather than emitted inverted.
+ */
+export function resolveAtlantaTimestamps(
+  incident: Pick<AtlantaCrimeIncident, 'ReportDate' | 'OccurredFromDate' | 'OccurredToDate'>,
+  now: number = Date.now(),
+): AtlantaTimestamps {
+  const occurredFrom = incident.OccurredFromDate ?? incident.ReportDate ?? now;
+  const occurredTo = Math.max(incident.OccurredToDate ?? occurredFrom, occurredFrom);
+
+  return {
+    occurredFrom,
+    occurredTo,
+    reportedAt: incident.ReportDate,
+    reportedBeforeOccurrence:
+      incident.ReportDate !== undefined && incident.ReportDate < occurredFrom,
+  };
 }
 
 /**
@@ -284,8 +322,8 @@ export class AtlantaCrimePlugin extends BasePlugin {
     const [longitude, latitude] = coordinates;
     const riskLevel = this.mapOffenseToRisk(incident);
 
-    const occurred = incident.OccurredFromDate ?? incident.ReportDate ?? Date.now();
-    const issued = incident.ReportDate ?? occurred;
+    const times = resolveAtlantaTimestamps(incident);
+    const occurred = times.occurredFrom;
 
     // Determine if recent (within last 24 hours)
     const isRecent = Date.now() - occurred < 24 * 60 * 60 * 1000;
@@ -307,13 +345,20 @@ export class AtlantaCrimePlugin extends BasePlugin {
         state: 'GA',
       },
       timestamps: {
-        issued: new Date(issued).toISOString(),
-        eventStart: new Date(occurred).toISOString(),
-        eventEnd: incident.OccurredToDate ? new Date(incident.OccurredToDate).toISOString() : undefined,
+        // Anchored to when the crime happened, not when it was filed. APD reports
+        // ~4% of incidents before their `OccurredFromDate`, and the query window
+        // filters on occurrence — so a report-anchored `issued` put alerts outside
+        // the window the caller asked for. Every other police plugin anchors on
+        // the event time; the report date is preserved in `metadata.reportedAt`.
+        issued: new Date(times.occurredFrom).toISOString(),
+        eventStart: new Date(times.occurredFrom).toISOString(),
+        eventEnd: new Date(times.occurredTo).toISOString(),
       },
       metadata: {
         incidentNumber: incident.IncidentNumber,
         reportNumber: incident.ReportNumber,
+        reportedAt: times.reportedAt !== undefined ? new Date(times.reportedAt).toISOString() : undefined,
+        ...(times.reportedBeforeOccurrence ? { reportedBeforeOccurrence: true } : {}),
         offense: incident.NIBRS_Offense,
         ucrCode: incident.NibrsUcrCode,
         part: incident.Part,
