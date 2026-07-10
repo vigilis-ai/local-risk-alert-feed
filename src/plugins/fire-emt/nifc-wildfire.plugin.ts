@@ -1,5 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { fetchArcGisFeatures, envelopeForRadius } from '../../utils/arcgis';
 
 /**
  * NIFC wildfire incident structure.
@@ -47,6 +48,10 @@ export interface NIFCWildfirePluginConfig extends BasePluginConfig {
   minAcres?: number;
   /** Only include fires in these states (2-letter codes). Default: all */
   states?: string[];
+  /** Records requested per page. Default: 1000. */
+  pageSize?: number;
+  /** Ceiling across all pages for one query. Default: 5000. */
+  maxRecords?: number;
 }
 
 /**
@@ -131,6 +136,8 @@ export class NIFCWildfirePlugin extends BasePlugin {
     this.pluginConfig = {
       includePrescribedBurns: false,
       minAcres: 0,
+      pageSize: 1000,
+      maxRecords: 5000,
       ...config,
     };
   }
@@ -140,6 +147,8 @@ export class NIFCWildfirePlugin extends BasePlugin {
     const cacheKey = this.generateCacheKey(options);
 
     try {
+      // Warnings are cached with the alerts; a cache hit that dropped them would
+      // report a truncated result as a complete one.
       const { data, fromCache } = await this.getCachedOrFetch(
         cacheKey,
         () => this.fetchWildfires(location, radiusMeters),
@@ -147,9 +156,10 @@ export class NIFCWildfirePlugin extends BasePlugin {
       );
 
       return {
-        alerts: data,
+        alerts: data.alerts,
         fromCache,
         cacheKey,
+        warnings: data.warnings.length > 0 ? data.warnings : undefined,
       };
     } catch (error) {
       console.error('NIFC Wildfire fetch error:', error);
@@ -163,7 +173,9 @@ export class NIFCWildfirePlugin extends BasePlugin {
   private async fetchWildfires(
     location: { latitude: number; longitude: number },
     radiusMeters: number
-  ) {
+  ): Promise<{ alerts: ReturnType<NIFCWildfirePlugin['transformIncident']>[]; warnings: string[] }> {
+    const warnings: string[] = [];
+
     // NIFC WFIGS Current Incident Locations
     const baseUrl = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query';
 
@@ -186,22 +198,39 @@ export class NIFCWildfirePlugin extends BasePlugin {
       whereClauses.push(`POOState IN (${stateList})`);
     }
 
+    // This is the *national* current-incident layer. It previously took an
+    // unordered 500 rows and filtered by radius client-side, so which fires
+    // survived was arbitrary — during fire season a blaze next to a site could
+    // be dropped. Bound it spatially, order it stably, and page through.
     const params = new URLSearchParams({
       where: whereClauses.join(' AND '),
       outFields: '*',
       f: 'json',
-      resultRecordCount: '500',
+      outSR: '4326',
+      orderByFields: 'OBJECTID DESC',
+      geometry: envelopeForRadius(location.latitude, location.longitude, radiusMeters),
+      geometryType: 'esriGeometryEnvelope',
+      spatialRel: 'esriSpatialRelIntersects',
+      inSR: '4326',
     });
 
-    const url = `${baseUrl}?${params}`;
-    const response = await this.fetchJson<NIFCArcGISResponse>(url);
+    const { features, truncated } = await fetchArcGisFeatures<NIFCArcGISResponse['features'][number]>({
+      baseUrl,
+      params,
+      pageSize: this.pluginConfig.pageSize!,
+      maxRecords: this.pluginConfig.maxRecords!,
+      fetchJson: (url) => this.fetchJson(url),
+    });
 
-    if (!response.features) {
-      return [];
+    if (truncated) {
+      warnings.push(
+        `NIFC returned more than ${this.pluginConfig.maxRecords} active incidents near this location; ` +
+          `only ${this.pluginConfig.maxRecords} were read. Narrow the radius for complete results.`
+      );
     }
 
     // Transform and filter by location
-    const alerts = response.features
+    const alerts = features
       .filter(f => {
         const lat = f.attributes.InitialLatitude ?? f.geometry?.y;
         const lng = f.attributes.InitialLongitude ?? f.geometry?.x;
@@ -218,7 +247,7 @@ export class NIFCWildfirePlugin extends BasePlugin {
       })
       .map(f => this.transformIncident(f.attributes, f.geometry));
 
-    return alerts;
+    return { alerts, warnings };
   }
 
   /**

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **`nifc-wildfire` took an arbitrary 500 rows from the national incident layer.** The query had no spatial filter and no `orderByFields`, so it pulled an unordered 500 of every active US incident and filtered by radius client-side — meaning *which* fires survived the cap was undefined, and during fire season a blaze next to a site could be dropped. The layer currently holds 495 incidents, five short of the cap. It now bounds the query to the requested radius, orders stably by `OBJECTID`, pages through the result set, and warns when a cap stops the walk.
+
 ## [1.1.0] - 2026-07-09
 
 ### Fixed
