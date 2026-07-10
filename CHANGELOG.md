@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-10
+
+### Fixed
+- **An ArcGIS outage was reported to callers as "no alerts near this site".** ArcGIS answers a rejected query with HTTP 200 and a body of `{"error": {...}}` carrying no `features` key, so `fetchJson` saw `response.ok` and never threw, and `fetchArcGisFeatures` coerced the missing array to an empty page — resolving `{ features: [], truncated: false }`. Every ArcGIS-backed plugin therefore rendered an upstream failure as a genuinely quiet feed, indistinguishable from a site with nothing happening near it. A failed page now throws `ArcGisQueryError` (exported from the package root) rather than returning zero features, and a page missing its `features` array is treated as a failure rather than as the end of the result set.
+
 ## [1.2.0] - 2026-07-10
 
 ### Added
