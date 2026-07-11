@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-07-11
+
+### Fixed
+- **`austin-crime` and `seattle-police` emitted schema-invalid `issued` timestamps.** Both used the upstream Socrata field verbatim (`report.rep_date`, `call.cad_event_original_time_queued`) — a floating local wall-clock with no timezone suffix (e.g. `2026-07-04T00:00:00.000`), which fails the contract's timezone-qualified datetime format. Harmless in-process (nothing re-validated), but over the federated transport `RemotePlugin` validates the response, so **every alert from these two plugins would be rejected and the plugin would return nothing.** Found by the new `risk-plugins` perf/scale/functional harness. Both now stamp the floating time with the source's real UTC offset via `zonedIso` (Austin = America/Chicago, Seattle = America/Los_Angeles), so the instant is valid and unambiguous — e.g. `2026-07-04T00:00:00-05:00`.
+
+### Added
+- **`zonedIso` / `offsetForZone`** exported from the package root — label a floating local timestamp (common in Socrata feeds) with the correct DST-aware UTC offset. Lets out-of-tree and federated plugins share one implementation instead of copying it.
+
 ## [1.4.0] - 2026-07-11
 
 ### Changed

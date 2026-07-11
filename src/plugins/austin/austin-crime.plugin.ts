@@ -1,5 +1,9 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { zonedIso } from '../../utils';
+
+/** Austin Socrata timestamps are floating local (US Central) with no zone. */
+const AUSTIN_TZ = 'America/Chicago';
 
 /**
  * Austin crime report from Socrata API.
@@ -313,7 +317,9 @@ export class AustinCrimePlugin extends BasePlugin {
         state: 'TX',
       },
       timestamps: {
-        issued: report.rep_date,
+        // `rep_date` is a floating Central-time wall clock with no zone suffix —
+        // stamping it with Austin's offset makes it a valid, unambiguous instant.
+        issued: zonedIso(report.rep_date, AUSTIN_TZ) ?? occDateTime.toISOString(),
         eventStart: occDateTime.toISOString(),
       },
       metadata: {

@@ -1,5 +1,9 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel, AlertCategory } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { zonedIso } from '../../utils';
+
+/** Seattle Socrata timestamps are floating local (US Pacific) with no zone. */
+const SEATTLE_TZ = 'America/Los_Angeles';
 
 /**
  * Seattle Police call data from Socrata API.
@@ -395,7 +399,9 @@ export class SeattlePolicePlugin extends BasePlugin {
     const { category, risk } = this.mapCallTypeToRisk(call.initial_call_type || 'UNKNOWN');
     const coords = this.getCallCoordinates(call)!;
 
-    const issued = call.cad_event_original_time_queued;
+    // Floating Pacific-time wall clock with no zone — stamp it with Seattle's
+    // offset so it's a valid, unambiguous instant (raw value fails the contract).
+    const issued = zonedIso(call.cad_event_original_time_queued, SEATTLE_TZ) ?? call.cad_event_original_time_queued;
 
     // Determine if recent (within last 2 hours)
     const isRecent = Date.now() - new Date(issued).getTime() < 2 * 60 * 60 * 1000;

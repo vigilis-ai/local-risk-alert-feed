@@ -140,6 +140,10 @@ export type { CSVParseOptions } from './utils';
 export { ArcGisQueryError, fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from './utils';
 export type { ArcGisFetchOptions, ArcGisFetchResult } from './utils';
 
+// Timezone helper — label a floating local timestamp (Socrata feeds) with the
+// correct UTC offset so it satisfies the contract's timezone-qualified format.
+export { zonedIso, offsetForZone } from './utils';
+
 // Federation — host-side clients for plugins that live behind HTTP endpoints
 export {
   RemotePlugin,
