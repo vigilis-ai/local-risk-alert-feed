@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-11
+
+### Changed
+- **`phoenix-fire`, `glendale-fire`, `bend-police` now fetch the most relevant records, not the firehose** — the same over-fetch that 1.3.0 fixed in `glendale-police`, found by measuring every plugin's record count and latency proactively rather than waiting for each to hit a bottleneck.
+  - **`phoenix-fire`**: a Phoenix-metro 7-day window is ~1,800 fire/EMS records (mostly EMS). Capped at the 500 most-recent. Unlike crime, fire/EMS relevance decays with time — a medical call days ago is not a current risk — so a recency cap is appropriate. ~1,787 rows / 2.9s → ~475 / 1.2s.
+  - **`glendale-fire`**: same recency cap (shares the Phoenix layer).
+  - **`bend-police`**: Bend PD has no priority field, so self-initiated/nuisance call types (traffic stops, follow-ups, parking, welfare checks, …) are now excluded server-side by call type — the dominant volume. That alone brings a 7-day window from ~1,200 to ~500 real calls, and cut latency from ~12.8s to ~4.5s. Capped at 500.
+- No API changes; `pageSize`/`maxRecords` override the caps if the full set is needed.
+
 ## [1.3.0] - 2026-07-11
 
 ### Changed

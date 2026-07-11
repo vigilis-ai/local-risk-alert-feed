@@ -110,7 +110,20 @@ const CALL_TYPE_MAP: Record<string, { category: AlertCategory; risk: RiskLevel }
 /**
  * Low priority call types that can be filtered out.
  */
+/**
+ * Self-initiated / administrative / nuisance call types that are never a "risk
+ * alert near a site". These dominate the feed — traffic stops and follow-ups
+ * alone are ~30% of volume — so they are excluded server-side (see the WHERE
+ * clause), which is what keeps a 7-day window under the relevance cap.
+ */
 const LOW_PRIORITY_TYPES = new Set([
+  'TS Traffic Stop',
+  'Traffic Stop',
+  'Traffic Complaint',
+  'Person Stop',
+  'C6 Follow-Up',
+  'CEP Community Enhancement Prog',
+  'Assist - Police',
   'Noise Complaint',
   'Parking Complaint',
   'Abandoned Vehicle',
@@ -118,8 +131,13 @@ const LOW_PRIORITY_TYPES = new Set([
   'Animal Complaint',
   'Dog Complaint',
   '911 Abandoned',
-  'C6 Follow-Up',
+  'Welfare Check',
 ]);
+
+/** SQL `NOT IN (...)` list of the low-priority call types, for the WHERE clause. */
+const LOW_PRIORITY_SQL_LIST = Array.from(LOW_PRIORITY_TYPES)
+  .map((t) => `'${t.replace(/'/g, "''")}'`)
+  .join(',');
 
 /**
  * Plugin that fetches police calls for service from Bend, Oregon Police Department ArcGIS service.
@@ -157,8 +175,11 @@ export class BendPolicePlugin extends BasePlugin {
   constructor(config?: BendPolicePluginConfig) {
     super(config);
     this.policeConfig = {
-      pageSize: config?.pageSize ?? config?.limit ?? 1000,
-      maxRecords: 5000,
+      pageSize: config?.pageSize ?? config?.limit ?? 500,
+      // Relevance cap. Bend PD has no priority field, so noise (traffic stops,
+      // follow-ups, etc.) is dropped server-side by call type — which brings a
+      // 7-day window from ~1,200 to ~500 real calls. The cap bounds the rest.
+      maxRecords: 500,
       includeLowPriority: true,
       ...config,
     };
@@ -211,7 +232,9 @@ export class BendPolicePlugin extends BasePlugin {
     // empty. `CreateDateTime` is genuine UTC and does accept TIMESTAMP literals,
     // despite the previous comment here claiming otherwise.
     const params = new URLSearchParams({
-      where: `CreateDateTime >= TIMESTAMP '${toArcGisTimestamp(new Date(startTs))}' AND CreateDateTime <= TIMESTAMP '${toArcGisTimestamp(new Date(endTs))}'`,
+      // Exclude self-initiated/nuisance call types server-side — never a risk
+      // alert, and the dominant volume — so the relevance cap holds real calls.
+      where: `CreateDateTime >= TIMESTAMP '${toArcGisTimestamp(new Date(startTs))}' AND CreateDateTime <= TIMESTAMP '${toArcGisTimestamp(new Date(endTs))}' AND CallType NOT IN (${LOW_PRIORITY_SQL_LIST})`,
       outFields: '*',
       f: 'json',
       outSR: '4326', // Request WGS84 coordinates

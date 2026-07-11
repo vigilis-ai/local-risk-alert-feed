@@ -142,8 +142,14 @@ export class PhoenixFirePlugin extends BasePlugin {
     this.fireConfig = {
       includeEMS: true,
       includeService: false,
-      pageSize: config?.pageSize ?? config?.limit ?? 1000,
-      maxRecords: 5000,
+      pageSize: config?.pageSize ?? config?.limit ?? 500,
+      // Relevance cap: the 500 most-recent fire/EMS calls. Unlike crime (where an
+      // old serious event still shapes area risk), fire/EMS relevance decays —
+      // a medical call days ago is not a current risk — so a recency cap is
+      // appropriate. A Phoenix-metro 7-day window is ~2,400 records (mostly EMS);
+      // the host only ever shows its top ~50, so returning them all just cost
+      // latency. Truncation is flagged.
+      maxRecords: 500,
       ...config,
     };
   }

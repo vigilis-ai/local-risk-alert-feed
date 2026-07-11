@@ -139,8 +139,10 @@ export class GlendaleFirePlugin extends BasePlugin {
     this.fireConfig = {
       includeEMS: true,
       includeService: false,
-      pageSize: config?.pageSize ?? config?.limit ?? 1000,
-      maxRecords: 5000,
+      pageSize: config?.pageSize ?? config?.limit ?? 500,
+      // Relevance cap: the 500 most-recent fire/EMS calls (relevance decays with
+      // time, so a recency cap is appropriate — see phoenix-fire). Truncation flagged.
+      maxRecords: 500,
       ...config,
     };
   }
