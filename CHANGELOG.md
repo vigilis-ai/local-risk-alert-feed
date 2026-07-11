@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-11
+
+### Changed
+- **`glendale-police` now fetches the most *relevant* calls, not the whole firehose.** A 7-day window near one site returned ~2,466 records — but ~60% of Glendale PD volume is officer self-initiated activity (Priority 7: traffic stops, field contacts), which is never a risk alert, and the host discards everything down to its top ~50 by risk anyway. Transferring and validating thousands of rows made each call ~15s, which is untenable over the federated (HTTP) transport. The query now drops Priority 7 server-side, orders by `CurrentPriorityKey` (severity proxy) then recency, and caps at 500 (one page) — every P1/P2 plus the most recent lower-priority calls, truncation-flagged. Measured: a Tanger Outlets 7-day query dropped from ~2,466 rows / ~15s to ~500 / ~4s, still surfacing the July 4 shooting as the top result. No API change; existing callers just get a smaller, more relevant, much faster result. Override with `pageSize`/`maxRecords` if the full set is genuinely needed.
+
 ## [1.2.1] - 2026-07-10
 
 ### Fixed

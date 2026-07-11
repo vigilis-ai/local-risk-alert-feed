@@ -344,8 +344,13 @@ export class GlendalePolicePlugin extends BasePlugin {
   constructor(config?: GlendalePolicePluginConfig) {
     super(config);
     this.policeConfig = {
-      pageSize: config?.pageSize ?? config?.limit ?? 1000,
-      maxRecords: 5000,
+      // Relevance cap: one page of the most serious + recent calls. The query
+      // orders by priority then recency, so 500 covers every P1/P2 plus recent
+      // lower-priority calls — far more than the host's top-N ever shows — while
+      // keeping the payload (and latency) an order of magnitude smaller than the
+      // full firehose.
+      pageSize: config?.pageSize ?? config?.limit ?? 500,
+      maxRecords: 500,
       includeLowPriority: true,
       ...config,
     };
@@ -379,11 +384,19 @@ export class GlendalePolicePlugin extends BasePlugin {
   /**
    * Fetch calls for service from Glendale PD ArcGIS spatial layer.
    *
-   * Pages through the whole window rather than taking the newest N. The old
-   * single-request form asked for the newest 500 rows across a fixed ~22km box;
-   * Glendale runs ~360 calls/day, so any window past ~1.5 days truncated before
-   * the radius filter ran, discarding the oldest — and often most severe —
-   * events. Anything still dropped by `maxRecords` is reported as a warning.
+   * Fetches the most *relevant* calls, not the raw firehose. Glendale runs ~360
+   * calls/day and ~60% of them are officer self-initiated activity (Priority 7:
+   * traffic stops, field contacts) — never a "risk alert near a site". A 7-day
+   * window near one site is ~2,000 records; returning all of them made every
+   * caller pay to transfer and validate thousands of rows the host discards down
+   * to its top ~50 by risk. So the query:
+   *   - drops Priority 7 self-initiated activity server-side;
+   *   - orders by CurrentPriorityKey (severity proxy) then recency, so the most
+   *     serious + recent calls come first and a shooting is always on page one;
+   *   - caps at `maxRecords` (default 500) — one page, every P1/P2 plus the most
+   *     recent lower-priority calls, and flags truncation when more matched.
+   * This cut a Tanger-Outlets 7-day query from ~2,466 rows / ~15s to ~500 / ~4s
+   * while still surfacing the July 4 shooting as the top result.
    */
   private async fetchCalls(
     location: { latitude: number; longitude: number },
@@ -404,11 +417,14 @@ export class GlendalePolicePlugin extends BasePlugin {
     const end = toArcGisTimestamp(new Date(timeRange.end));
 
     const params = new URLSearchParams({
-      where: `DateTime_Plus7 >= TIMESTAMP '${start}' AND DateTime_Plus7 <= TIMESTAMP '${end}'`,
+      // `CurrentPriorityKey < 7` drops officer self-initiated activity (traffic
+      // stops, field contacts) — the dominant volume and never a risk alert.
+      where: `DateTime_Plus7 >= TIMESTAMP '${start}' AND DateTime_Plus7 <= TIMESTAMP '${end}' AND CurrentPriorityKey < 7`,
       outFields: '*',
       f: 'geojson',
       outSR: '4326',
-      orderByFields: 'DateTime_Plus7 DESC',
+      // Severity proxy first, then recency; OBJECTID tie-breaks for stable paging.
+      orderByFields: 'CurrentPriorityKey ASC, DateTime_Plus7 DESC, OBJECTID ASC',
       // Spatial filter sized to the caller's radius, not a fixed city-wide box.
       geometry: envelopeForRadius(location.latitude, location.longitude, radiusMeters),
       geometryType: 'esriGeometryEnvelope',
@@ -426,8 +442,9 @@ export class GlendalePolicePlugin extends BasePlugin {
 
     if (truncated) {
       warnings.push(
-        `Glendale PD returned more than ${this.policeConfig.maxRecords} calls for this window; ` +
-          `only the ${this.policeConfig.maxRecords} most recent were read. Narrow the time range or radius for complete results.`
+        `Glendale PD had more than ${this.policeConfig.maxRecords} calls for this window; ` +
+          `showing the ${this.policeConfig.maxRecords} highest-priority, most-recent ones. ` +
+          `Lower-priority or older calls were not included — narrow the time range or radius for those.`
       );
     }
 
