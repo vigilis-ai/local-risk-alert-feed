@@ -26,6 +26,7 @@ export type {
   PluginTemporalCharacteristics,
   PluginMetadata,
   PluginFetchOptions,
+  AlertRankMode,
   PluginFetchResult,
   AlertPlugin,
   PluginResultInfo,
@@ -37,6 +38,7 @@ export type {
   TimeRange,
   TimeRangeInput,
   AlertQuery,
+  QueryIntent,
   AlertQueryMeta,
   AlertQueryResponse,
 } from './query';

@@ -103,6 +103,29 @@ export function utcInstantOf(call: { IncidentDate: number; DateTime_Plus7?: numb
     : call.IncidentDate + PHOENIX_UTC_OFFSET_MS;
 }
 
+/**
+ * Translate the host's risk floor into a GPD priority ceiling, so the floor can
+ * be pushed into the upstream query instead of fetching records we'd discard.
+ *
+ * GPD priority is a severity proxy (1 = life-threatening … 6 = routine).
+ * Deliberately conservative: the ceiling must never exclude a call that could
+ * classify at or above the floor, so it errs on fetching a little extra rather
+ * than dropping a serious call. `undefined` = no ceiling (fetch everything).
+ */
+function priorityCeilingForRisk(minRiskLevel?: RiskLevel): number | undefined {
+  switch (minRiskLevel) {
+    // Only P1/P2 calls ever classify severe+ (shootings, robbery, assault, DV).
+    case 'extreme':
+    case 'severe':
+      return 2;
+    // `high` adds burglary/theft-of-vehicle, which GPD codes as P3.
+    case 'high':
+      return 3;
+    default:
+      return undefined;
+  }
+}
+
 /** Risk levels, ascending. */
 const RISK_ORDER: RiskLevel[] = ['low', 'moderate', 'high', 'severe', 'extreme'];
 
@@ -360,12 +383,15 @@ export class GlendalePolicePlugin extends BasePlugin {
     const { location, timeRange, radiusMeters, categories } = options;
     const cacheKey = this.generateCacheKey(options);
 
+    // Only pull what the host can actually use, in the order it will rank by.
+    const budget = this.resolveFetchBudget(options, this.policeConfig.maxRecords!);
+
     try {
       // Cache the warnings alongside the alerts: a cache hit that dropped the
       // warning would report a truncated window as a complete one.
       const { data, fromCache } = await this.getCachedOrFetch(
         cacheKey,
-        () => this.fetchCalls(location, timeRange, radiusMeters, categories),
+        () => this.fetchCalls(location, timeRange, radiusMeters, categories, budget),
         this.config.cacheTtlMs
       );
 
@@ -402,7 +428,8 @@ export class GlendalePolicePlugin extends BasePlugin {
     location: { latitude: number; longitude: number },
     timeRange: { start: string; end: string },
     radiusMeters: number,
-    categories?: AlertCategory[]
+    categories: AlertCategory[] | undefined,
+    budget: { maxRecords: number; rank: 'severity' | 'recency'; minRiskLevel?: RiskLevel }
   ): Promise<{ alerts: ReturnType<GlendalePolicePlugin['transformCall']>[]; warnings: string[] }> {
     // Glendale PD public calls for service - spatial layer with point geometry
     const baseUrl = 'https://services1.arcgis.com/9fVTQQSiODPjLUTa/ArcGIS/rest/services/P1_CFS_REDACTED_PT_hosted/FeatureServer/47/query';
@@ -416,15 +443,32 @@ export class GlendalePolicePlugin extends BasePlugin {
     const start = toArcGisTimestamp(new Date(timeRange.start));
     const end = toArcGisTimestamp(new Date(timeRange.end));
 
+    // `CurrentPriorityKey < 7` drops officer self-initiated activity (traffic
+    // stops, field contacts) — the dominant volume and never a risk alert.
+    const where = [
+      `DateTime_Plus7 >= TIMESTAMP '${start}'`,
+      `DateTime_Plus7 <= TIMESTAMP '${end}'`,
+      'CurrentPriorityKey < 7',
+    ];
+
+    // The host's risk floor, pushed into the query: GPD priority is a severity
+    // proxy, so a floor of `high`+ means we needn't fetch P3-P6 at all.
+    const priorityCeiling = priorityCeilingForRisk(budget.minRiskLevel);
+    if (priorityCeiling !== undefined) {
+      where.push(`CurrentPriorityKey <= ${priorityCeiling}`);
+    }
+
     const params = new URLSearchParams({
-      // `CurrentPriorityKey < 7` drops officer self-initiated activity (traffic
-      // stops, field contacts) — the dominant volume and never a risk alert.
-      where: `DateTime_Plus7 >= TIMESTAMP '${start}' AND DateTime_Plus7 <= TIMESTAMP '${end}' AND CurrentPriorityKey < 7`,
+      where: where.join(' AND '),
       outFields: '*',
       f: 'geojson',
       outSR: '4326',
-      // Severity proxy first, then recency; OBJECTID tie-breaks for stable paging.
-      orderByFields: 'CurrentPriorityKey ASC, DateTime_Plus7 DESC, OBJECTID ASC',
+      // Fetch the slice the host will actually rank by. OBJECTID tie-breaks so
+      // paging is stable either way.
+      orderByFields:
+        budget.rank === 'recency'
+          ? 'DateTime_Plus7 DESC, OBJECTID ASC'
+          : 'CurrentPriorityKey ASC, DateTime_Plus7 DESC, OBJECTID ASC',
       // Spatial filter sized to the caller's radius, not a fixed city-wide box.
       geometry: envelopeForRadius(location.latitude, location.longitude, radiusMeters),
       geometryType: 'esriGeometryEnvelope',
@@ -435,16 +479,18 @@ export class GlendalePolicePlugin extends BasePlugin {
     const { features, truncated } = await fetchArcGisFeatures<ArcGISGeoJSONResponse['features'][number]>({
       baseUrl,
       params,
-      pageSize: this.policeConfig.pageSize!,
-      maxRecords: this.policeConfig.maxRecords!,
+      pageSize: Math.min(this.policeConfig.pageSize!, budget.maxRecords),
+      maxRecords: budget.maxRecords,
       fetchJson: (url) => this.fetchJson(url),
     });
 
     if (truncated) {
+      const ordering =
+        budget.rank === 'recency' ? 'most-recent' : 'highest-priority, most-recent';
       warnings.push(
-        `Glendale PD had more than ${this.policeConfig.maxRecords} calls for this window; ` +
-          `showing the ${this.policeConfig.maxRecords} highest-priority, most-recent ones. ` +
-          `Lower-priority or older calls were not included — narrow the time range or radius for those.`
+        `Glendale PD had more than ${budget.maxRecords} calls for this window; ` +
+          `showing the ${budget.maxRecords} ${ordering} ones. ` +
+          `Others were not included — narrow the time range or radius for those.`
       );
     }
 

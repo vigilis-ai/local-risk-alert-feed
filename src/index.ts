@@ -32,6 +32,8 @@ export type {
   PluginResultInfo,
   // Query types
   AlertQuery,
+  QueryIntent,
+  AlertRankMode,
   AlertQueryResponse,
   AlertQueryMeta,
   TimeRange,

@@ -189,12 +189,15 @@ export class BendPolicePlugin extends BasePlugin {
     const { location, timeRange, radiusMeters, categories } = options;
     const cacheKey = this.generateCacheKey(options);
 
+    // Only pull what the host can actually use (see BasePlugin.resolveFetchBudget).
+    const budget = this.resolveFetchBudget(options, this.policeConfig.maxRecords!);
+
     try {
       // Warnings are cached with the alerts; a cache hit that dropped them would
       // report a truncated window as a complete one.
       const { data, fromCache } = await this.getCachedOrFetch(
         cacheKey,
-        () => this.fetchCalls(location, timeRange, radiusMeters, categories),
+        () => this.fetchCalls(location, timeRange, radiusMeters, categories, budget),
         this.config.cacheTtlMs
       );
 
@@ -217,7 +220,8 @@ export class BendPolicePlugin extends BasePlugin {
     location: { latitude: number; longitude: number },
     timeRange: { start: string; end: string },
     radiusMeters: number,
-    categories?: AlertCategory[]
+    categories: AlertCategory[] | undefined,
+    budget: { maxRecords: number; rank: 'severity' | 'recency' }
   ): Promise<{ alerts: ReturnType<BendPolicePlugin['transformCall']>[]; warnings: string[] }> {
     // Bend Police public calls for service
     const baseUrl = 'https://services5.arcgis.com/JisFYcK2mIVg9ueP/arcgis/rest/services/Public_Calls/FeatureServer/0/query';
@@ -248,15 +252,15 @@ export class BendPolicePlugin extends BasePlugin {
     const { features, truncated } = await fetchArcGisFeatures<ArcGISResponse['features'][number]>({
       baseUrl,
       params,
-      pageSize: this.policeConfig.pageSize!,
-      maxRecords: this.policeConfig.maxRecords!,
+      pageSize: Math.min(this.policeConfig.pageSize!, budget.maxRecords),
+      maxRecords: budget.maxRecords,
       fetchJson: (url) => this.fetchJson(url),
     });
 
     if (truncated) {
       warnings.push(
-        `Bend PD returned more than ${this.policeConfig.maxRecords} calls for this window; ` +
-          `only the ${this.policeConfig.maxRecords} most recent were read. Narrow the time range or radius for complete results.`
+        `Bend PD returned more than ${budget.maxRecords} calls for this window; ` +
+          `only the ${budget.maxRecords} most recent were read. Narrow the time range or radius for complete results.`
       );
     }
 

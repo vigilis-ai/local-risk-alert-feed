@@ -47,6 +47,21 @@ export const MAX_QUERY_LIMIT = 1000;
 /**
  * Query parameters for fetching alerts.
  */
+/**
+ * What the caller is trying to do. Drives how results are ranked and selected —
+ * the same alerts, presented for a different question.
+ *
+ * - `triage` (default) — "what matters most near me, right now". Results are
+ *   scored by severity, liveness and recency, then selected with a **fair share
+ *   per category**, so one busy source can't monopolise the answer. Without
+ *   this, a week of severe police calls fills every slot and an active fire
+ *   next door never surfaces.
+ * - `focused` — "show me X" (the caller named `categories` and/or `sources`).
+ *   Severity is not the point: within the requested scope, return the fullest,
+ *   most recent set. No cross-category balancing — the caller already chose.
+ */
+export type QueryIntent = 'triage' | 'focused';
+
 export interface AlertQuery {
   /** Center point for the query */
   location: GeoPoint;
@@ -62,6 +77,17 @@ export interface AlertQuery {
   categories?: AlertCategory[];
   /** Filter by specific temporal types */
   temporalTypes?: AlertTemporalType[];
+  /**
+   * Restrict to specific plugin ids (e.g. only fire/EMS response sources).
+   * Plugins outside the list are not queried at all.
+   */
+  sources?: string[];
+  /**
+   * How to rank and select. Defaults to `focused` when `categories` or `sources`
+   * is set (the caller has already narrowed the question), otherwise `triage`.
+   * Set explicitly to override.
+   */
+  intent?: QueryIntent;
   /** Include detailed plugin execution information */
   includePluginResults?: boolean;
 }

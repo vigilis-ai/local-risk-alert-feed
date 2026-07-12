@@ -100,8 +100,20 @@ export class AlertFeed {
     const limit = query.limit ?? DEFAULT_QUERY_LIMIT;
     const timeRange = normalizeTimeRange(query.timeRange);
 
+    // A caller who named categories or sources has already narrowed the
+    // question, so rank for that ("show me fire calls") rather than triaging.
+    const intent =
+      query.intent ??
+      (query.categories?.length || query.sources?.length ? 'focused' : 'triage');
+
     // Get all enabled plugins
-    const allPlugins = this.registry.getAll(true);
+    let allPlugins = this.registry.getAll(true);
+
+    // Restrict to specific sources when asked (e.g. only fire/EMS responders).
+    if (query.sources?.length) {
+      const wanted = new Set(query.sources);
+      allPlugins = allPlugins.filter((p) => wanted.has(p.metadata.id));
+    }
 
     // Resolve which plugins to query based on location and filters
     const applicablePlugins = this.resolver.resolve(allPlugins, {
@@ -126,6 +138,14 @@ export class AlertFeed {
     }));
 
     // Fetch from temporally compatible plugins (each uses its own default radius if callerRadius is undefined)
+    // The fetch budget we hand each plugin. A plugin can never contribute more
+    // than `limit` alerts to the answer, so pulling thousands is pure waste —
+    // the headroom just covers alerts the aggregator drops on the post-filters
+    // (risk floor, radius, time). Ordering guidance tells the plugin WHICH slice
+    // to keep when it has to cut: the worst (triage) or the latest (focused).
+    const maxResults = Math.max(limit * 2, 50);
+    const rank = intent === 'focused' ? 'recency' : 'severity';
+
     const { alertSets, pluginResults } = await this.fetchFromPlugins(
       temporallyCompatible,
       {
@@ -134,6 +154,9 @@ export class AlertFeed {
         limit,
         categories: query.categories,
         temporalTypes: query.temporalTypes,
+        maxResults,
+        minRiskLevel: query.minRiskLevel,
+        rank,
       },
       callerRadius,
       query.includePluginResults ?? false
@@ -148,6 +171,7 @@ export class AlertFeed {
       location: query.location,
       radiusMeters: callerRadius,
       limit,
+      intent,
     });
 
     const truncated = aggregatedAlerts.length < this.getTotalAlertCount(alertSets);

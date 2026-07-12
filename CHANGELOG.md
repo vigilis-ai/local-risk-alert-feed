@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-11
+
+### Added
+- **Query intent — the same alerts, ranked for the question actually being asked.** `AlertQuery.intent`:
+  - **`triage`** (default): *"what matters most near me, right now."* Results are selected with a **fair share per category**, so one busy source can't monopolise the answer.
+  - **`focused`**: the caller named `categories` and/or the new `sources` (restrict to specific plugin ids, e.g. only fire/EMS responders). Severity is not the question — return the fullest, most **recent** set in scope, with no cross-category balancing. Auto-selected when `categories`/`sources` is set; set `intent` explicitly to override.
+- **A fetch budget pushed down to plugins.** `PluginFetchOptions` gains `maxResults` (the most records the host can actually *use* from this plugin), `minRiskLevel` (the risk floor, so a source with a severity field can filter upstream instead of fetching-then-dropping), and `rank` (`severity` | `recency` — which slice to keep when it must cut). `BasePlugin.resolveFetchBudget()` gives plugins one uniform way to honour it; ignoring it still works, it just wastes bandwidth. `glendale-police`, `phoenix-fire`, `glendale-fire` and `bend-police` now honour it, and glendale-police additionally pushes the risk floor into its query as a priority ceiling.
+
+### Fixed
+- **One busy source could take every slot.** Near Tanger Outlets a week of severe police calls filled all 50 results and the guard saw **zero** of the 353 fire/EMS incidents also present — an active fire next door would never have surfaced. Triage now round-robins across categories (each internally ordered worst-first), so every kind of risk present is represented while still leading with the worst of each. Leftover slots go to the best of the rest, so a genuinely crime-dominated area still reads as crime-dominated.
+- **Ranking respects severity over freshness.** A first cut used a multiplicative recency decay; it made a *moderate roadwork notice from this morning* outrank the *July 4 shooting*, which is exactly wrong for a security product. Severity band is now the primary key, an in-progress incident is bumped one band (a live fire beats a settled one of equal severity, but never leapfrogs something genuinely worse), and time only breaks ties **within** a band.
+
 ## [1.5.0] - 2026-07-11
 
 ### Fixed

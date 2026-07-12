@@ -151,12 +151,15 @@ export class GlendaleFirePlugin extends BasePlugin {
     const { location, timeRange, radiusMeters, categories } = options;
     const cacheKey = this.generateCacheKey(options);
 
+    // Only pull what the host can actually use (see BasePlugin.resolveFetchBudget).
+    const budget = this.resolveFetchBudget(options, this.fireConfig.maxRecords!);
+
     try {
       // Warnings are cached with the alerts; a cache hit that dropped them would
       // report a truncated window as a complete one.
       const { data, fromCache } = await this.getCachedOrFetch(
         cacheKey,
-        () => this.fetchIncidents(location, timeRange, radiusMeters, categories),
+        () => this.fetchIncidents(location, timeRange, radiusMeters, categories, budget),
         this.config.cacheTtlMs
       );
 
@@ -180,7 +183,8 @@ export class GlendaleFirePlugin extends BasePlugin {
     location: { latitude: number; longitude: number },
     timeRange: { start: string; end: string },
     radiusMeters: number,
-    categories?: AlertCategory[]
+    categories: AlertCategory[] | undefined,
+    budget: { maxRecords: number; rank: 'severity' | 'recency' }
   ): Promise<{ alerts: ReturnType<GlendaleFirePlugin['transformIncident']>[]; warnings: string[] }> {
     const baseUrl = 'https://maps.phoenix.gov/phxfire/rest/services/IncidentHistory30DayPoints/MapServer/0/query';
 
@@ -217,15 +221,15 @@ export class GlendaleFirePlugin extends BasePlugin {
     const { features, truncated } = await fetchArcGisFeatures<ArcGISGeoJSONResponse['features'][number]>({
       baseUrl,
       params,
-      pageSize: this.fireConfig.pageSize!,
-      maxRecords: this.fireConfig.maxRecords!,
+      pageSize: Math.min(this.fireConfig.pageSize!, budget.maxRecords),
+      maxRecords: budget.maxRecords,
       fetchJson: (url) => this.fetchJson(url),
     });
 
     if (truncated) {
       warnings.push(
-        `Phoenix Regional Dispatch returned more than ${this.fireConfig.maxRecords} incidents for this window; ` +
-          `only the ${this.fireConfig.maxRecords} most recent were read. Narrow the time range or radius for complete results.`
+        `Phoenix Regional Dispatch returned more than ${budget.maxRecords} incidents for this window; ` +
+          `only the ${budget.maxRecords} most recent were read. Narrow the time range or radius for complete results.`
       );
     }
 

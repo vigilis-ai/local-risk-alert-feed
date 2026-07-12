@@ -329,7 +329,7 @@ export class SeattlePolicePlugin extends BasePlugin {
         // Filter by minimum priority if configured
         if (this.policeConfig.minPriority) {
           const priority = parseInt(call.priority);
-          if (!isNaN(priority) && priority > this.policeConfig.minPriority) return false;
+          if (!Number.isNaN(priority) && priority > this.policeConfig.minPriority) return false;
         }
 
         // Filter by categories if specified
@@ -358,7 +358,7 @@ export class SeattlePolicePlugin extends BasePlugin {
     if (call.dispatch_latitude && call.dispatch_longitude) {
       const lat = parseFloat(call.dispatch_latitude);
       const lng = parseFloat(call.dispatch_longitude);
-      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+      if (!Number.isNaN(lat) && !Number.isNaN(lng) && lat !== 0 && lng !== 0) {
         return { latitude: lat, longitude: lng };
       }
     }

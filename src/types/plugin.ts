@@ -1,5 +1,5 @@
 import type { GeoPoint } from './geo';
-import type { Alert, AlertCategory, AlertTemporalType } from './alert';
+import type { Alert, AlertCategory, AlertTemporalType, RiskLevel } from './alert';
 import type { TimeRange } from './query';
 
 /**
@@ -102,13 +102,47 @@ export interface PluginFetchOptions {
   radiusMeters: number;
   /** Time range for alerts */
   timeRange: TimeRange;
-  /** Maximum number of alerts to return */
+  /**
+   * The caller's overall result limit (across ALL plugins).
+   * @deprecated for budgeting — use {@link maxResults}, which is this plugin's
+   * actual share. `limit` is the whole query's ceiling, not yours.
+   */
   limit?: number;
   /** Filter by specific categories */
   categories?: AlertCategory[];
   /** Filter by specific temporal types */
   temporalTypes?: AlertTemporalType[];
+
+  // --- Fetch budget: what the host will actually USE from this plugin. ---
+  // A plugin that ignores these still works; it just wastes time and bandwidth
+  // pulling records the host is going to discard. Honour them where the upstream
+  // query can express them (ordering, a severity floor, a row cap).
+
+  /**
+   * The most records the host can possibly use from THIS plugin for this query.
+   * Fetching beyond it is pure waste — the aggregator will throw them away.
+   * Use it to cap the upstream row count.
+   */
+  maxResults?: number;
+  /**
+   * The lowest risk level the host will keep. Alerts below it are discarded, so
+   * push this into the upstream query where the source has a severity/priority
+   * field (e.g. a police priority code) rather than fetching and dropping them.
+   */
+  minRiskLevel?: RiskLevel;
+  /**
+   * How the host will rank results, so the plugin can fetch the *right* slice
+   * when it has to choose:
+   *  - `severity` — the host wants the worst things first (triage). Order the
+   *    upstream query by its severity proxy, so a cap keeps the serious records.
+   *  - `recency`  — the host wants the latest things first (a focused/browse
+   *    query). Order by time, so a cap keeps the newest records.
+   */
+  rank?: AlertRankMode;
 }
+
+/** How the host intends to rank results — see {@link PluginFetchOptions.rank}. */
+export type AlertRankMode = 'severity' | 'recency';
 
 /**
  * Result returned by a plugin's fetchAlerts method.

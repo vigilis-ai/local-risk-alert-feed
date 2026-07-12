@@ -320,6 +320,43 @@ export abstract class BasePlugin implements AlertPlugin {
   }
 
   /**
+   * Resolve the host's fetch budget for this query.
+   *
+   * The host tells every plugin how many records it can actually use
+   * (`maxResults`), how it will rank them (`rank`), and the risk floor it will
+   * apply (`minRiskLevel`). A plugin that ignores this still works — it just
+   * burns time and bandwidth pulling records the aggregator throws away, which
+   * is what made a busy police feed take 15s over the wire to contribute ~10
+   * alerts.
+   *
+   * Use it to bound the upstream query:
+   *   const { maxRecords, rank } = this.resolveFetchBudget(options, 500);
+   *   params.set('resultRecordCount', String(maxRecords));
+   *   params.set('orderByFields', rank === 'severity' ? SEVERITY_ORDER : RECENCY_ORDER);
+   *
+   * @param options - the fetch options the host passed in
+   * @param ceiling - this plugin's own hard cap (its safety limit)
+   */
+  protected resolveFetchBudget(
+    options: PluginFetchOptions,
+    ceiling: number
+  ): { maxRecords: number; rank: 'severity' | 'recency'; minRiskLevel?: RiskLevel } {
+    const requested = options.maxResults;
+    const maxRecords =
+      typeof requested === 'number' && Number.isFinite(requested) && requested > 0
+        ? Math.min(ceiling, Math.ceil(requested))
+        : ceiling;
+
+    return {
+      maxRecords,
+      // Default to severity: if the host didn't say, assume the caller wants the
+      // worst things — never silently drop a shooting to keep a parking call.
+      rank: options.rank ?? 'severity',
+      minRiskLevel: options.minRiskLevel,
+    };
+  }
+
+  /**
    * Map a numeric severity to a risk level.
    *
    * @param value - Numeric value (0-100 scale)

@@ -1,4 +1,4 @@
-import type { Alert, RiskLevel, GeoPoint, TimeRange } from '../types';
+import type { Alert, RiskLevel, GeoPoint, TimeRange, QueryIntent } from '../types';
 import { RISK_LEVEL_VALUES } from '../types';
 import { haversineDistance } from '../geo';
 
@@ -16,7 +16,33 @@ export interface AggregateOptions {
   location?: GeoPoint;
   /** Radius in meters for location filtering */
   radiusMeters?: number;
+  /** How to rank + select. Defaults to `triage`. See {@link QueryIntent}. */
+  intent?: QueryIntent;
+  /** "Now", for recency scoring. Injectable for tests. */
+  now?: number;
 }
+
+/**
+ * An alert still unfolding is treated as one band more urgent. A fire with units
+ * on scene right now outranks a settled incident of the same nominal severity —
+ * but it does NOT leapfrog a genuinely worse one.
+ */
+const REAL_TIME_BAND_BOOST = 1;
+
+/**
+ * Severity band dominates; recency only orders *within* a band.
+ *
+ * A multiplicative recency decay was tried and is wrong for this domain: with
+ * any decay steep enough to make "live" matter, a fresh **roadwork** notice
+ * outranks a **shooting** from six days ago. For a guard, severity is not
+ * negotiable — a shooting near their post last week is material no matter how
+ * much roadwork happened since. So risk is the primary key, liveness nudges by
+ * one band, and time is the tie-breaker.
+ *
+ * The multiplier is larger than any epoch-ms timestamp, so the band can never be
+ * crossed by recency alone.
+ */
+const BAND_MULTIPLIER = 1e13;
 
 /**
  * Sort order for alerts.
@@ -66,15 +92,101 @@ export class AlertAggregator {
       alerts = this.filterByRadius(alerts, options.location, options.radiusMeters);
     }
 
-    // Sort by priority (primary) and time (secondary)
-    alerts = this.sort(alerts, ['priority-asc', 'time-desc']);
+    const limit = options.limit;
+    const intent = options.intent ?? 'triage';
+    const now = options.now ?? Date.now();
 
-    // Apply limit
-    if (options.limit && alerts.length > options.limit) {
-      alerts = alerts.slice(0, options.limit);
+    if (intent === 'focused') {
+      // The caller already narrowed the question ("show me fire calls"), so
+      // severity is not the sort key — they want the latest, fullest set in
+      // scope. No cross-category balancing: they chose the categories.
+      alerts = this.sort(alerts, ['time-desc']);
+      return limit && alerts.length > limit ? alerts.slice(0, limit) : alerts;
     }
 
-    return alerts;
+    // Triage: "what matters most near me, right now."
+    return this.selectForTriage(alerts, limit, now);
+  }
+
+  /**
+   * Score an alert for triage: how much a guard should care, right now.
+   *
+   * Severity band first (a shooting always outranks roadwork, however fresh the
+   * roadwork), an in-progress incident counts one band higher, and time breaks
+   * ties inside a band so the newest of equally-bad things leads.
+   */
+  scoreForTriage(alert: Alert, now: number = Date.now()): number {
+    const risk = RISK_LEVEL_VALUES[alert.riskLevel] ?? 1;
+    const band = risk + (alert.temporalType === 'real-time' ? REAL_TIME_BAND_BOOST : 0);
+
+    const issued = new Date(alert.timestamps.issued).getTime();
+    // Unparseable/absent → treat as oldest, never as "now".
+    const when = Number.isFinite(issued) ? Math.min(issued, now) : 0;
+
+    return band * BAND_MULTIPLIER + when;
+  }
+
+  /**
+   * Pick the final set for a triage query, giving each **category** a fair
+   * share rather than letting the highest-scoring source take every slot.
+   *
+   * Why: a busy police feed legitimately produces dozens of severe alerts in a
+   * week. Ranked on a single flat list they fill all N slots, and the guard
+   * never sees the active fire, the heat warning, or the road closure — even
+   * though those are exactly what "what's happening near me" means. Round-robin
+   * across categories (each internally ordered by score) guarantees every kind
+   * of risk present is represented, while still leading with the worst of each.
+   * Leftover slots go to whatever scores highest overall, so a genuinely
+   * crime-dominated area still surfaces mostly crime.
+   */
+  private selectForTriage(alerts: Alert[], limit: number | undefined, now: number): Alert[] {
+    const scored = alerts
+      .map((alert) => ({ alert, score: this.scoreForTriage(alert, now) }))
+      .sort((a, b) => b.score - a.score);
+
+    if (!limit || scored.length <= limit) {
+      return scored.map((s) => s.alert);
+    }
+
+    // Bucket by category, each already in descending score order.
+    const buckets = new Map<string, Alert[]>();
+    for (const { alert } of scored) {
+      const bucket = buckets.get(alert.category);
+      if (bucket) bucket.push(alert);
+      else buckets.set(alert.category, [alert]);
+    }
+
+    const picked: Alert[] = [];
+    const taken = new Set<string>();
+    const queues = [...buckets.values()];
+
+    // Round-robin one from each category until full or every bucket is drained.
+    let progressed = true;
+    while (picked.length < limit && progressed) {
+      progressed = false;
+      for (const queue of queues) {
+        if (picked.length >= limit) break;
+        const next = queue.shift();
+        if (!next) continue;
+        picked.push(next);
+        taken.add(next.id);
+        progressed = true;
+      }
+    }
+
+    // Any slots left (a category ran dry) go to the best of the rest.
+    if (picked.length < limit) {
+      for (const { alert } of scored) {
+        if (picked.length >= limit) break;
+        if (!taken.has(alert.id)) {
+          picked.push(alert);
+          taken.add(alert.id);
+        }
+      }
+    }
+
+    // Present the chosen set worst-first, so the top of the list is the top risk.
+    return picked.sort((a, b) => this.scoreForTriage(b, now) - this.scoreForTriage(a, now));
   }
 
   /**
