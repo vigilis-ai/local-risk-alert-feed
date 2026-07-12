@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-07-11
+
+### Fixed
+- **A focused query could return alerts outside the requested categories.** The resolver only decides which *plugins* to ask; a plugin that spans several categories still returns everything it found (Glendale PD dispatches fire `904` and medical `901x` calls alongside crime). So "any fires nearby?" came back with a severe thunderstorm watch in it. The category scope is now enforced on the **alerts**, not just on plugin selection.
+
 ## [1.6.0] - 2026-07-11
 
 ### Added

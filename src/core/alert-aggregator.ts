@@ -1,4 +1,4 @@
-import type { Alert, RiskLevel, GeoPoint, TimeRange, QueryIntent } from '../types';
+import type { Alert, RiskLevel, GeoPoint, TimeRange, QueryIntent, AlertCategory } from '../types';
 import { RISK_LEVEL_VALUES } from '../types';
 import { haversineDistance } from '../geo';
 
@@ -16,6 +16,8 @@ export interface AggregateOptions {
   location?: GeoPoint;
   /** Radius in meters for location filtering */
   radiusMeters?: number;
+  /** Keep only alerts in these categories (a plugin may span several). */
+  categories?: AlertCategory[];
   /** How to rank + select. Defaults to `triage`. See {@link QueryIntent}. */
   intent?: QueryIntent;
   /** "Now", for recency scoring. Injectable for tests. */
@@ -76,6 +78,18 @@ export class AlertAggregator {
 
     // Deduplicate
     alerts = this.deduplicate(alerts);
+
+    // Filter by category.
+    //
+    // The resolver only decides which PLUGINS to ask; a plugin that spans
+    // several categories still returns whatever it found. Glendale PD, for
+    // instance, dispatches fire (904) and medical (901x) calls as well as crime.
+    // So "show me fire calls" has to be enforced on the ALERTS too, or a
+    // thunderstorm watch turns up in a fire query.
+    if (options.categories?.length) {
+      const wanted = new Set(options.categories);
+      alerts = alerts.filter((alert) => wanted.has(alert.category));
+    }
 
     // Filter by risk level
     if (options.minRiskLevel) {

@@ -147,4 +147,24 @@ describe('focused selection — the caller already narrowed it', () => {
     expect(out).toHaveLength(10);
     expect(out.every((a) => a.category === 'fire')).toBe(true);
   });
+
+  it('enforces the category scope on ALERTS, not just on which plugins ran', () => {
+    // The resolver only picks plugins; a multi-category plugin (Glendale PD
+    // dispatches fire and medical calls too) still returns whatever it found.
+    // Without filtering the alerts, "any fires nearby?" came back with a
+    // thunderstorm watch in it.
+    const weather = alert('weather', 'severe', 1);
+    const fire = alert('fire', 'high', 2);
+    const medical = alert('medical', 'high', 3);
+    const crime = alert('crime', 'extreme', 4);
+
+    const out = agg.aggregate([[weather, fire, medical, crime]], {
+      limit: 50,
+      categories: ['fire', 'medical'],
+      intent: 'focused',
+      now: NOW,
+    });
+
+    expect(out.map((a) => a.category).sort()).toEqual(['fire', 'medical']);
+  });
 });

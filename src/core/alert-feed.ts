@@ -172,6 +172,7 @@ export class AlertFeed {
       radiusMeters: callerRadius,
       limit,
       intent,
+      categories: query.categories,
     });
 
     const truncated = aggregatedAlerts.length < this.getTotalAlertCount(alertSets);
