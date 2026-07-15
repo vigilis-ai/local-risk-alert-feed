@@ -61,6 +61,15 @@ export interface AlertFeedConfig {
   continueOnPluginError?: boolean;
   /** Maximum concurrent plugin fetches (default: 5) */
   maxConcurrentFetches?: number;
+  /**
+   * Overall deadline for a whole `query()`, across all plugins, in ms. When set,
+   * the query returns whatever plugins have finished by the deadline instead of
+   * blocking on the slowest — a fast source is never held hostage by a slow one.
+   * Plugins that miss the deadline are reported as incomplete. `pluginTimeoutMs`
+   * still bounds each individual plugin; this bounds the aggregate. Unset = wait
+   * for every plugin (legacy behaviour).
+   */
+  overallTimeoutMs?: number;
 }
 
 /**

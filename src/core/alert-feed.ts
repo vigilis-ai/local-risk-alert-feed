@@ -27,7 +27,7 @@ export class AlertFeed {
       AlertFeedConfig,
       'defaultCacheTtlMs' | 'pluginTimeoutMs' | 'continueOnPluginError' | 'maxConcurrentFetches'
     >
-  >;
+  > & { overallTimeoutMs?: number };
 
   constructor(config?: AlertFeedConfig) {
     this.registry = new PluginRegistry();
@@ -38,6 +38,7 @@ export class AlertFeed {
       pluginTimeoutMs: config?.pluginTimeoutMs ?? 30 * 1000,
       continueOnPluginError: config?.continueOnPluginError ?? true,
       maxConcurrentFetches: config?.maxConcurrentFetches ?? 5,
+      overallTimeoutMs: config?.overallTimeoutMs,
     };
 
     // Register initial plugins if provided
@@ -146,7 +147,9 @@ export class AlertFeed {
     const maxResults = Math.max(limit * 2, 50);
     const rank = intent === 'focused' ? 'recency' : 'severity';
 
-    const { alertSets, pluginResults } = await this.fetchFromPlugins(
+    const overallTimeoutMs = query.overallTimeoutMs ?? this.config.overallTimeoutMs;
+
+    const { alertSets, pluginResults, incompletePlugins } = await this.fetchFromPlugins(
       temporallyCompatible,
       {
         location: query.location,
@@ -159,7 +162,8 @@ export class AlertFeed {
         rank,
       },
       callerRadius,
-      query.includePluginResults ?? false
+      query.includePluginResults ?? false,
+      overallTimeoutMs
     );
 
     // Aggregate alerts
@@ -187,6 +191,9 @@ export class AlertFeed {
         location: query.location,
         radiusMeters: callerRadius,
         truncated,
+        ...(incompletePlugins.length > 0
+          ? { partial: true, incompletePlugins }
+          : {}),
       },
     };
 
@@ -199,7 +206,16 @@ export class AlertFeed {
   }
 
   /**
-   * Fetch alerts from multiple plugins with concurrency control.
+   * Fetch alerts from multiple plugins with a bounded concurrency pool and an
+   * optional overall deadline.
+   *
+   * A worker pool keeps up to `maxConcurrentFetches` plugins in flight at once —
+   * unlike the old sequential-chunk scheme, a fast plugin never waits behind a
+   * slow one in an earlier chunk. When `overallTimeoutMs` is set, the whole fan-
+   * out is raced against that deadline: whatever has completed is returned, and
+   * plugins still running are reported in `incompletePlugins` instead of holding
+   * up the caller. `pluginTimeoutMs` still caps each plugin individually.
+   *
    * When callerRadius is undefined, each plugin uses its own defaultRadiusMeters
    * (falling back to the framework DEFAULT_QUERY_RADIUS_METERS).
    */
@@ -207,35 +223,81 @@ export class AlertFeed {
     plugins: ReturnType<typeof this.registry.getAll>,
     baseOptions: Omit<PluginFetchOptions, 'radiusMeters'>,
     callerRadius: number | undefined,
-    includeResults: boolean
+    includeResults: boolean,
+    overallTimeoutMs?: number
   ): Promise<{
     alertSets: Alert[][];
     pluginResults: PluginResultInfo[];
+    incompletePlugins: string[];
   }> {
+    const collected: Array<{ alerts: Alert[]; info: PluginResultInfo } | undefined> = new Array(
+      plugins.length
+    );
+
+    let deadlineHit = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline =
+      overallTimeoutMs && overallTimeoutMs > 0
+        ? new Promise<void>((resolve) => {
+            timer = setTimeout(() => {
+              deadlineHit = true;
+              resolve();
+            }, overallTimeoutMs);
+          })
+        : undefined;
+
+    // Bounded worker pool: each worker pulls the next plugin index until the
+    // list is exhausted or the deadline has fired (no point starting new work
+    // we're about to abandon).
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < plugins.length && !deadlineHit) {
+        const index = next++;
+        const plugin = plugins[index];
+        const radiusMeters =
+          callerRadius ?? plugin.metadata.defaultRadiusMeters ?? DEFAULT_QUERY_RADIUS_METERS;
+        const result = await this.fetchFromPlugin(plugin, { ...baseOptions, radiusMeters });
+        collected[index] = result;
+      }
+    };
+
+    const poolSize = Math.max(1, Math.min(this.config.maxConcurrentFetches, plugins.length));
+    const run = Promise.all(Array.from({ length: poolSize }, () => worker()));
+
+    try {
+      // `run` rejects only when continueOnPluginError is false and a plugin
+      // throws — in which case the whole query should fail, so let it propagate.
+      await (deadline ? Promise.race([run, deadline]) : run);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+
     const alertSets: Alert[][] = [];
     const pluginResults: PluginResultInfo[] = [];
+    const incompletePlugins: string[] = [];
 
-    // Process plugins with concurrency limit
-    const chunks = this.chunkArray(plugins, this.config.maxConcurrentFetches);
-
-    for (const chunk of chunks) {
-      const chunkResults = await Promise.all(
-        chunk.map((plugin) => {
-          const radiusMeters =
-            callerRadius ?? plugin.metadata.defaultRadiusMeters ?? DEFAULT_QUERY_RADIUS_METERS;
-          return this.fetchFromPlugin(plugin, { ...baseOptions, radiusMeters });
-        })
-      );
-
-      for (const result of chunkResults) {
+    for (let i = 0; i < plugins.length; i++) {
+      const result = collected[i];
+      if (result) {
         alertSets.push(result.alerts);
+        if (includeResults) pluginResults.push(result.info);
+      } else {
+        // Never started or still running when the deadline fired.
+        incompletePlugins.push(plugins[i].metadata.id);
         if (includeResults) {
-          pluginResults.push(result.info);
+          pluginResults.push({
+            pluginId: plugins[i].metadata.id,
+            pluginName: plugins[i].metadata.name,
+            success: false,
+            alertCount: 0,
+            durationMs: overallTimeoutMs ?? 0,
+            error: 'overall query deadline exceeded',
+          });
         }
       }
     }
 
-    return { alertSets, pluginResults };
+    return { alertSets, pluginResults, incompletePlugins };
   }
 
   /**
@@ -301,17 +363,6 @@ export class AlertFeed {
    */
   private getTotalAlertCount(alertSets: Alert[][]): number {
     return alertSets.reduce((sum, set) => sum + set.length, 0);
-  }
-
-  /**
-   * Split an array into chunks.
-   */
-  private chunkArray<T>(array: T[], size: number): T[][] {
-    const chunks: T[][] = [];
-    for (let i = 0; i < array.length; i += size) {
-      chunks.push(array.slice(i, i + size));
-    }
-    return chunks;
   }
 
   /**

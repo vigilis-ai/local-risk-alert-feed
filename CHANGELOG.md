@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-07-15
+
+### Added
+- **An overall query deadline, so a slow source can't hold the caller hostage.** `AlertFeedConfig.overallTimeoutMs` (or per-query `AlertQuery.overallTimeoutMs`) bounds a whole `query()` across all plugins. When it fires, the query returns whatever plugins have already finished; the rest are reported in `meta.incompletePlugins` with `meta.partial = true` instead of blocking the response. `pluginTimeoutMs` still caps each plugin individually — this caps the aggregate. Unset preserves the previous "wait for everyone" behaviour.
+
+### Changed
+- **Plugin fan-out is now a bounded worker pool instead of sequential chunks.** Up to `maxConcurrentFetches` plugins run at once and a new one starts the moment a slot frees, so a fast plugin is never stuck waiting behind a slow one in an earlier chunk. Previously the fetch ran chunk-by-chunk with a barrier between each, so total latency was the sum of the slowest-per-chunk; now it's driven by the pool (and bounded by `overallTimeoutMs` when set).
+
 ## [1.6.1] - 2026-07-11
 
 ### Fixed

@@ -90,6 +90,12 @@ export interface AlertQuery {
   intent?: QueryIntent;
   /** Include detailed plugin execution information */
   includePluginResults?: boolean;
+  /**
+   * Overall deadline for this query across all plugins, in ms. Overrides the
+   * feed-level `overallTimeoutMs`. Returns whatever finished by the deadline;
+   * slow plugins are reported as incomplete rather than blocking the response.
+   */
+  overallTimeoutMs?: number;
 }
 
 /**
@@ -108,6 +114,14 @@ export interface AlertQueryMeta {
   radiusMeters?: number;
   /** Whether results were truncated due to limit */
   truncated: boolean;
+  /**
+   * True when an overall deadline fired before every plugin finished, so the
+   * result is a partial view. The plugins that didn't finish are listed in
+   * `incompletePlugins`. Absent/false means every plugin completed.
+   */
+  partial?: boolean;
+  /** Plugin ids that did not finish before the overall deadline. */
+  incompletePlugins?: string[];
 }
 
 /**
