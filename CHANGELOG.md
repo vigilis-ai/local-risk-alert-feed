@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-07-26
+
+### Fixed
+- **`atlanta-crime` ignored the host's fetch budget and asked for every column.** It read up to its own 5,000-record cap regardless of what the caller said it could use, with `outFields=*` on a wide layer — so most of the response was records the host discarded and columns the plugin never reads. It now calls `resolveFetchBudget` like the other ArcGIS plugins, pages no larger than that budget, and names the 19 fields it actually uses.
+
+  Measured against the live APD layer at a 10 km envelope, with the budget the host really passes (100): a 7-day window drops **0.53 MB → 0.06 MB (89%)** and a 30-day window **1.71 MB → 0.06 MB (97%)**. A 1-day window was already small (0.06 MB) and improves to 0.04 MB — the bloat only showed on wider windows, where it had grown past the 4 MB transport warning threshold.
+
 ## [1.7.2] - 2026-07-26
 
 ### Fixed

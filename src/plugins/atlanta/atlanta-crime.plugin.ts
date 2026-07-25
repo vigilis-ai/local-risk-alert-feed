@@ -31,6 +31,36 @@ interface AtlantaCrimeIncident {
   GAFamilyViolenceIndicator?: string; // "YES" | "NO"
 }
 
+/**
+ * Exactly the columns this plugin reads, requested by name instead of `*`.
+ *
+ * `OBJECTID` is included because ArcGIS pagination orders and keys on it.
+ * `Longitude`/`Latitude` are deliberately absent — coordinates arrive in the
+ * GeoJSON `geometry`, so asking for them again duplicates every point.
+ * `NIBRS_Bucket` is absent because nothing reads it.
+ */
+const ATLANTA_CRIME_OUT_FIELDS = [
+  'OBJECTID',
+  'IncidentNumber',
+  'ReportNumber',
+  'FireArmInvolved',
+  'ReportDate',
+  'OccurredFromDate',
+  'OccurredToDate',
+  'Part',
+  'Crime_Against',
+  'NibrsUcrCode',
+  'NIBRS_Offense',
+  'Vic_Count',
+  'StreetAddress',
+  'LocationType',
+  'Zone',
+  'BEAT',
+  'NPU',
+  'NhoodName',
+  'GAFamilyViolenceIndicator',
+].join(',');
+
 /** Timestamps for an APD incident, anchored to when the crime occurred. */
 export interface AtlantaTimestamps {
   /** When the crime happened (or began). The alert's `issued` and `eventStart`. */
@@ -211,12 +241,18 @@ export class AtlantaCrimePlugin extends BasePlugin {
     const { location, radiusMeters, timeRange } = options;
     const cacheKey = this.generateCacheKey(options);
 
+    // Only pull what the host can actually use. Without this the plugin read up
+    // to `maxRecords` (5,000) regardless of the caller's budget, so a wide window
+    // over a city the size of Atlanta produced a multi-megabyte response the host
+    // then threw almost all of away.
+    const budget = this.resolveFetchBudget(options, this.crimeConfig.maxRecords!);
+
     try {
       // Warnings are cached with the alerts. Previously they were pushed into an
       // array captured by the cached fetcher, so a cache hit silently dropped them.
       const { data, fromCache } = await this.getCachedOrFetch(
         cacheKey,
-        () => this.fetchCrimeReports(location, radiusMeters, timeRange),
+        () => this.fetchCrimeReports(location, radiusMeters, timeRange, budget.maxRecords),
         this.config.cacheTtlMs
       );
 
@@ -238,7 +274,8 @@ export class AtlantaCrimePlugin extends BasePlugin {
   private async fetchCrimeReports(
     location: { latitude: number; longitude: number },
     radiusMeters: number,
-    timeRange: { start: string; end: string }
+    timeRange: { start: string; end: string },
+    maxRecords: number
   ): Promise<{ alerts: ReturnType<AtlantaCrimePlugin['transformIncident']>[]; warnings: string[] }> {
     const warnings: string[] = [];
     const baseUrl =
@@ -251,7 +288,12 @@ export class AtlantaCrimePlugin extends BasePlugin {
 
     const params = new URLSearchParams({
       where: `OccurredFromDate >= TIMESTAMP '${startTs}' AND OccurredFromDate <= TIMESTAMP '${endTs}'`,
-      outFields: '*',
+      // Name the columns instead of `*`. The APD layer is wide and `*` returned
+      // every field of every record — the bulk of the payload was columns this
+      // plugin never reads. Keep this list in step with AtlantaCrimeIncident;
+      // a field requested here but unused is waste, and one used but missing
+      // here arrives undefined.
+      outFields: ATLANTA_CRIME_OUT_FIELDS,
       f: 'geojson',
       outSR: '4326',
       orderByFields: 'OccurredFromDate DESC',
@@ -266,15 +308,17 @@ export class AtlantaCrimePlugin extends BasePlugin {
       const { features, truncated } = await fetchArcGisFeatures<ArcGISGeoJSONResponse['features'][number]>({
         baseUrl,
         params,
-        pageSize: this.crimeConfig.pageSize!,
-        maxRecords: this.crimeConfig.maxRecords!,
+        // Never page larger than the budget — a 1,000-row page to satisfy a
+        // 50-row budget is 950 rows of pure waste over the federated transport.
+        pageSize: Math.min(this.crimeConfig.pageSize!, maxRecords),
+        maxRecords,
         fetchJson: (url) => this.fetchJson(url),
       });
 
       if (truncated) {
         warnings.push(
-          `Atlanta PD returned more than ${this.crimeConfig.maxRecords} incidents for this window; ` +
-            `only the ${this.crimeConfig.maxRecords} most recent were read. Narrow the time range or radius for complete results.`
+          `Atlanta PD returned more than ${maxRecords} incidents for this window; ` +
+            `only the ${maxRecords} most recent were read. Narrow the time range or radius for complete results.`
         );
       }
 
