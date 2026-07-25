@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-07-26
+
+### Fixed
+- **`phoenix-fire` and `glendale-fire` also under-declared their delay.** Both declared 24h and run ~34h behind, which left them exactly on the boundary: a 24-hour window looked answerable, returned nothing, and said nothing about why. Both now declare 48h.
+
+  Found by auditing all 28 feeds, which needed a better method than 1.7.0 used. "Age of the newest record" measures publication delay only on a continuously-active feed; on a sparse or scheduled one it just measures when something last happened, and would have wrongly flagged `atlanta-traffic` (1 record), `nyc-traffic` and `nj-workzones`. The discriminator is the age *distribution*: a delayed feed shows a hard cutoff — `phoenix-fire` carries 31 records/day and **zero** newer than 34h, the same signature as the known-delayed `bend-police` — while a live feed runs right up to the present, as `seattle-emt` does with 22 records in the last six hours.
+
 ## [1.7.1] - 2026-07-26
 
 ### Fixed

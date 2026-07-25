@@ -126,7 +126,11 @@ export class PhoenixFirePlugin extends BasePlugin {
     temporal: {
       supportsPast: true,
       supportsFuture: false,
-      dataLagMinutes: 1440, // ~24 hour delay
+      // Measured 2026-07-26: a busy feed (25-31 records/day) with ZERO records
+      // newer than 34h — the hard cutoff that distinguishes a publication lag
+      // from a quiet spell. Declared 24h left it exactly on the boundary, so a
+      // 24h window looked answerable and returned empty without a word.
+      dataLagMinutes: 2880, // ~48h; observed 34h // ~24 hour delay
       freshnessDescription: '~24 hour delay',
     },
     supportedTemporalTypes: ['historical', 'real-time'],
