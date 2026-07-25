@@ -36,6 +36,7 @@ export type {
   AlertRankMode,
   AlertQueryResponse,
   AlertQueryMeta,
+  SourceFreshness,
   TimeRange,
   TimeRangePreset,
   TimeRangeInput,

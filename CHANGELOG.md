@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-07-26
+
+### Fixed
+- **`SourceFreshness` wasn't exported from the package root**, so consumers couldn't name the type 1.7.0 had just added. It was re-exported from `types/index.ts` but missing from the root export list.
+
 ## [1.7.0] - 2026-07-26
 
 ### Added
