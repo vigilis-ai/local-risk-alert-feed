@@ -129,7 +129,9 @@ export class NYCCrimePlugin extends BasePlugin {
     temporal: {
       supportsPast: true,
       supportsFuture: false,
-      dataLagMinutes: 60 * 24 * 45, // ~quarterly publication
+      // Measured 2026-07-25: newest complaint was 116 days old. NYPD publishes
+      // quarterly, so the real delay runs well past one quarter.
+      dataLagMinutes: 60 * 24 * 120, // ~120d; observed 116d
       freshnessDescription: 'Updated quarterly (most recent complete quarter)',
     },
     supportedTemporalTypes: ['historical'],

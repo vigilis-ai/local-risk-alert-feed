@@ -99,6 +99,56 @@ export interface AlertQuery {
 }
 
 /**
+ * What one source contributed, and whether its publication delay means the
+ * requested window could never have reached its data.
+ *
+ * This exists to separate two answers that look identical today: "nothing
+ * happened near you" and "this source publishes days behind, so it has nothing
+ * to say about the last 24 hours *yet*". Both arrive as zero alerts. Only the
+ * first is a quiet night; the second is a question worth re-asking over a wider
+ * window, and a caller that can't tell them apart will report a blind spot as an
+ * all-clear.
+ *
+ * Reported for every source consulted, including ones skipped before they were
+ * called. Nothing here changes which alerts are returned — it is context for
+ * presenting them honestly.
+ */
+export interface SourceFreshness {
+  /** Plugin id, e.g. `bend-police`. */
+  pluginId: string;
+  /** Human-readable plugin name, e.g. "Bend Police Department". */
+  pluginName: string;
+  /** How many alerts this source contributed (0 if skipped or empty). */
+  alertCount: number;
+  /** The source's declared publication delay in minutes, when it declares one. */
+  dataLagMinutes?: number;
+  /**
+   * The most recent instant this source can know about (`now - dataLagMinutes`),
+   * ISO 8601. Anything it returns is at best this old. Present only when the
+   * source declares a delay.
+   */
+  asOf?: string;
+  /**
+   * True when the requested window starts *after* `asOf` — the whole window sits
+   * inside this source's blind spot, so an empty result says nothing about
+   * whether anything happened. This is the flag that turns "no alerts" into
+   * "nothing published yet, ask again over a longer window".
+   */
+  lagExceedsWindow: boolean;
+  /**
+   * A window that WOULD reach this source's data: the requested span, shifted
+   * back far enough to clear the delay. Present only when `lagExceedsWindow` is
+   * true — offer it to the user rather than applying it silently, since data
+   * from days ago is not an answer to "what is happening now".
+   */
+  suggestedTimeRange?: TimeRange;
+  /** True when the source was skipped before being called. */
+  skipped?: boolean;
+  /** Why it was skipped, when it was. */
+  skipReason?: string;
+}
+
+/**
  * Metadata about the query response.
  */
 export interface AlertQueryMeta {
@@ -122,6 +172,12 @@ export interface AlertQueryMeta {
   partial?: boolean;
   /** Plugin ids that did not finish before the overall deadline. */
   incompletePlugins?: string[];
+  /**
+   * Per-source freshness for every source consulted. Lets a caller tell a quiet
+   * night from a source that simply hasn't published yet, and offer a wider
+   * window when one would help. See {@link SourceFreshness}.
+   */
+  sources?: SourceFreshness[];
 }
 
 /**

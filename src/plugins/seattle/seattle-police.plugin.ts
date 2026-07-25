@@ -232,7 +232,10 @@ export class SeattlePolicePlugin extends BasePlugin {
     temporal: {
       supportsPast: true,
       supportsFuture: false,
-      dataLagMinutes: 60,
+      // Measured 2026-07-25: newest call was 3 days old, not the 1 hour
+      // declared. This was the worst of the under-declarations — an hour's
+      // claimed delay made every short window look answerable.
+      dataLagMinutes: 4320, // ~3d; observed 3d
       freshnessDescription: 'Updated approximately hourly',
     },
     supportedTemporalTypes: ['historical', 'real-time'],

@@ -5,7 +5,10 @@ import type {
   PluginRegistration,
   PluginFetchOptions,
   PluginResultInfo,
+  SourceFreshness,
+  TimeRange,
   Alert,
+  AlertPlugin,
 } from '../types';
 import { DEFAULT_QUERY_RADIUS_METERS, DEFAULT_QUERY_LIMIT } from '../types';
 import { PluginRegistry } from './plugin-registry';
@@ -162,7 +165,6 @@ export class AlertFeed {
         rank,
       },
       callerRadius,
-      query.includePluginResults ?? false,
       overallTimeoutMs
     );
 
@@ -182,6 +184,17 @@ export class AlertFeed {
     const truncated = aggregatedAlerts.length < this.getTotalAlertCount(alertSets);
 
     // Build response
+    // Per-source freshness, covering both the plugins we called and the ones we
+    // skipped. Without this an empty answer is ambiguous: a source that publishes
+    // days behind returns zero for "the last 24 hours" exactly like a source with
+    // genuinely nothing to report, and the caller cannot tell a blind spot from
+    // an all-clear.
+    const sources = this.buildSourceFreshness(
+      [...temporallyCompatible, ...temporallySkipped.map((s) => s.plugin)],
+      [...pluginResults, ...skippedResults],
+      timeRange
+    );
+
     const response: AlertQueryResponse = {
       alerts: aggregatedAlerts,
       meta: {
@@ -194,6 +207,7 @@ export class AlertFeed {
         ...(incompletePlugins.length > 0
           ? { partial: true, incompletePlugins }
           : {}),
+        ...(sources.length > 0 ? { sources } : {}),
       },
     };
 
@@ -203,6 +217,67 @@ export class AlertFeed {
     }
 
     return response;
+  }
+
+  /**
+   * Describe how fresh each consulted source is, relative to the window asked.
+   *
+   * A source that publishes on a delay cannot know anything newer than
+   * `now - dataLagMinutes`. When the requested window starts after that instant,
+   * the entire window sits in the source's blind spot and an empty result is
+   * meaningless — it says only "not published yet", never "nothing happened".
+   * Flagging that (with a window that *would* reach the data) is what lets a
+   * caller offer to look further back instead of reporting a false all-clear.
+   *
+   * Deliberately does NOT widen anything or drop any source. The declared lag is
+   * an estimate and wrong in both directions in practice — some feeds publish
+   * sooner than they claim, and `phoenix-crime-risk` declares a 30-day delay
+   * while emitting a currently-valid area score. Skipping on that number would
+   * silently drop working sources, so every applicable source is still called
+   * and this is reported alongside whatever it returned.
+   */
+  private buildSourceFreshness(
+    plugins: AlertPlugin[],
+    results: PluginResultInfo[],
+    timeRange: TimeRange
+  ): SourceFreshness[] {
+    const now = Date.now();
+    const startMs = new Date(timeRange.start).getTime();
+    const endMs = new Date(timeRange.end).getTime();
+    const spanMs = Math.max(endMs - startMs, 0);
+    const resultById = new Map(results.map((r) => [r.pluginId, r]));
+
+    return plugins.map((plugin) => {
+      const { id, name, temporal } = plugin.metadata;
+      const result = resultById.get(id);
+      const lagMinutes = temporal?.dataLagMinutes;
+
+      const entry: SourceFreshness = {
+        pluginId: id,
+        pluginName: name,
+        alertCount: result?.alertCount ?? 0,
+        lagExceedsWindow: false,
+        ...(result?.skipped ? { skipped: true, skipReason: result.skipReason } : {}),
+      };
+
+      if (lagMinutes === undefined || lagMinutes <= 0) return entry;
+
+      const lagMs = lagMinutes * 60 * 1000;
+      const asOfMs = now - lagMs;
+      entry.dataLagMinutes = lagMinutes;
+      entry.asOf = new Date(asOfMs).toISOString();
+
+      if (startMs > asOfMs) {
+        entry.lagExceedsWindow = true;
+        // Same span, shifted back past the delay — the window to offer, not to apply.
+        entry.suggestedTimeRange = {
+          start: new Date(asOfMs - spanMs).toISOString(),
+          end: timeRange.end,
+        };
+      }
+
+      return entry;
+    });
   }
 
   /**
@@ -223,7 +298,6 @@ export class AlertFeed {
     plugins: ReturnType<typeof this.registry.getAll>,
     baseOptions: Omit<PluginFetchOptions, 'radiusMeters'>,
     callerRadius: number | undefined,
-    includeResults: boolean,
     overallTimeoutMs?: number
   ): Promise<{
     alertSets: Alert[][];
@@ -276,24 +350,27 @@ export class AlertFeed {
     const pluginResults: PluginResultInfo[] = [];
     const incompletePlugins: string[] = [];
 
+    // Always collected, never conditionally: per-source freshness reports counts
+    // for every query, so gating this on `includePluginResults` made a source's
+    // alertCount read 0 whenever the caller hadn't asked for plugin diagnostics.
+    // What `includePluginResults` controls is whether this is EXPOSED on the
+    // response — see the caller.
     for (let i = 0; i < plugins.length; i++) {
       const result = collected[i];
       if (result) {
         alertSets.push(result.alerts);
-        if (includeResults) pluginResults.push(result.info);
+        pluginResults.push(result.info);
       } else {
         // Never started or still running when the deadline fired.
         incompletePlugins.push(plugins[i].metadata.id);
-        if (includeResults) {
-          pluginResults.push({
-            pluginId: plugins[i].metadata.id,
-            pluginName: plugins[i].metadata.name,
-            success: false,
-            alertCount: 0,
-            durationMs: overallTimeoutMs ?? 0,
-            error: 'overall query deadline exceeded',
-          });
-        }
+        pluginResults.push({
+          pluginId: plugins[i].metadata.id,
+          pluginName: plugins[i].metadata.name,
+          success: false,
+          alertCount: 0,
+          durationMs: overallTimeoutMs ?? 0,
+          error: 'overall query deadline exceeded',
+        });
       }
     }
 

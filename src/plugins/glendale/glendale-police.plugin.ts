@@ -352,7 +352,11 @@ export class GlendalePolicePlugin extends BasePlugin {
     temporal: {
       supportsPast: true,
       supportsFuture: false,
-      dataLagMinutes: 1440, // ~24 hour delay
+      // Measured 2026-07-25: newest record was 37h old. Declared 24h meant a
+      // 24h window looked satisfiable and came back empty without a word.
+      // Round UP — over-declaring only offers a wider window unnecessarily,
+      // under-declaring reports a blind spot as an all-clear.
+      dataLagMinutes: 2880, // ~48h; observed 37h
       freshnessDescription: '~24 hour delay',
     },
     supportedTemporalTypes: ['historical', 'real-time'],

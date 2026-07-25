@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-07-26
+
+### Added
+- **Per-source freshness, so an empty answer can't pass for a quiet night.** `meta.sources` now reports, for every source consulted, how many alerts it contributed, its declared publication delay (`dataLagMinutes`), the newest instant it could possibly know about (`asOf`), and — the point of the whole thing — `lagExceedsWindow`: true when the requested window starts *after* that instant, so the entire window sits in the source's blind spot and an empty result means "not published yet", not "nothing happened".
+
+  Today those two cases are indistinguishable. Bend PD publishes ~35 hours behind; asked for the last 24 hours it returns zero, exactly like a source reporting a genuinely quiet night. A caller can only relay that as "nothing near you" — reporting a blind spot as an all-clear.
+
+  When the flag is set, `suggestedTimeRange` carries the same span shifted back past the delay: a window that *would* reach the data. It is offered, never applied. Silently widening would answer "what's happening near me" with a week-old complaint, which trades a false silence for a false present — the caller should ask ("Bend PD runs about 2 days behind — want me to check the last few days?"), and a yes is just an ordinary query with an explicit range.
+
+  Purely additive: which alerts are returned is unchanged, and no source is dropped or skipped on the strength of its declared lag.
+
+### Fixed
+- **Four sources under-declared their publication delay, defeating the freshness flag.** Measured against the live feeds on 2026-07-25 by taking the age of each one's newest record: `seattle-police` declared 1 hour but runs ~3 days behind, `austin-crime` declared 24h and runs ~7 days, `nyc-crime` declared 45 days and runs ~116, and `glendale-police` declared 24h but runs ~37 — enough that a 24-hour window looked satisfiable and came back empty without a word. All four now declare a rounded-up value. Rounding up is deliberate: over-declaring merely offers a wider window that wasn't needed, while under-declaring reports a blind spot as an all-clear.
+- **`meta.sources` counts were wrong unless `includePluginResults` was set.** Per-plugin results were only collected when the caller asked for the diagnostic array, so every source's `alertCount` read 0 otherwise. They are now always collected internally; `includePluginResults` still controls whether `pluginResults` is exposed on the response.
+
 ## [1.6.2] - 2026-07-15
 
 ### Added

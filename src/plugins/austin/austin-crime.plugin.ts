@@ -153,7 +153,9 @@ export class AustinCrimePlugin extends BasePlugin {
     temporal: {
       supportsPast: true,
       supportsFuture: false,
-      dataLagMinutes: 1440, // ~24 hour delay for crime reports
+      // Measured 2026-07-25: newest record was 7 days old, not the 24h
+      // previously declared — a day-long query could never have matched.
+      dataLagMinutes: 10080, // ~7d; observed 7d
       freshnessDescription: '~24 hour delay',
     },
     supportedTemporalTypes: ['historical', 'real-time'],

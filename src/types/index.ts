@@ -41,6 +41,7 @@ export type {
   QueryIntent,
   AlertQueryMeta,
   AlertQueryResponse,
+  SourceFreshness,
 } from './query';
 export {
   DEFAULT_QUERY_RADIUS_METERS,
