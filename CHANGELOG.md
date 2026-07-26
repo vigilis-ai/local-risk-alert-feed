@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.7.4] - 2026-07-26
+
+### Fixed
+- **The fetch budget never crossed the federation boundary.** `maxResults`, `minRiskLevel` and `rank` — added in 1.6.0 so a plugin pulls only what the host can use — were absent from both `PluginFetchOptionsSchema` and the body `RemotePlugin` posts. Every federated endpoint therefore saw no budget and fell back to its own ceiling: a host asking for 50 alerts still pulled thousands over the wire and discarded nearly all of them.
+
+  Harmless while plugins also ran in-process, and invisible from the outside — the alerts were correct, just enormously over-fetched. Once hosts moved to remote-only the budget was dead everywhere. `atlanta-crime` read ~4,800 records for a query that could use 100; `glendale-police` ~500.
+
+  All three fields are optional, so an older endpoint ignores them and a newer endpoint called by an older host still uses its ceiling. No contract-version bump: the change is additive.
+
 ## [1.7.3] - 2026-07-26
 
 ### Fixed

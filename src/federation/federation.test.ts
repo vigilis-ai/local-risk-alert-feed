@@ -327,6 +327,47 @@ describe('federation round-trip', () => {
     expect(result.alerts[0].title).toBe('Heat advisory');
   });
 
+  it('carries the fetch budget across the wire to the plugin', async () => {
+    // Regression: maxResults/minRiskLevel/rank were absent from both the wire
+    // schema and RemotePlugin's request body, so the budget added in 1.6.0
+    // never reached a federated endpoint. Every plugin fell back to its own
+    // ceiling and returned thousands of records the host discarded — invisible
+    // until hosts went remote-only and the budget was dead everywhere.
+    let seen: PluginFetchOptions | undefined;
+    class BudgetSpyPlugin extends FakeWeatherPlugin {
+      async fetchAlerts(options: PluginFetchOptions) {
+        seen = options;
+        return super.fetchAlerts(options);
+      }
+    }
+
+    const handler = createPluginServiceHandler({
+      plugins: [new BudgetSpyPlugin()],
+      credentials: creds,
+    });
+    const client = new FederationClient({ fetchImpl: handlerAsFetch(handler) });
+    const plugin = new RemotePlugin({
+      id: 'fake-weather',
+      endpoint: 'https://plugins.example.test',
+      credentials: primaryCredential(await creds.resolve('fake-weather')),
+      client,
+    });
+    await plugin.initialize();
+
+    await plugin.fetchAlerts({
+      location: { latitude: 33.4, longitude: -112 },
+      radiusMeters: 5000,
+      timeRange: { start: '2026-07-01T00:00:00.000Z', end: '2026-07-02T00:00:00.000Z' },
+      maxResults: 100,
+      minRiskLevel: 'high',
+      rank: 'recency',
+    });
+
+    expect(seen?.maxResults).toBe(100);
+    expect(seen?.minRiskLevel).toBe('high');
+    expect(seen?.rank).toBe('recency');
+  });
+
   it('loadRemotePlugins builds registrations from a store', async () => {
     const handler = createPluginServiceHandler({
       plugins: [new FakeWeatherPlugin()],

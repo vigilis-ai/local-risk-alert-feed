@@ -104,6 +104,21 @@ export const PluginFetchOptionsSchema = z.object({
   limit: z.number().int().positive().optional(),
   categories: z.array(AlertCategorySchema).optional(),
   temporalTypes: z.array(AlertTemporalTypeSchema).optional(),
+  // --- Fetch budget ---------------------------------------------------------
+  // These were missing from the wire contract until 1.7.4, so the budget added
+  // in 1.6.0 never reached a federated plugin: every endpoint fell back to its
+  // own ceiling and returned thousands of records the host discarded. Harmless
+  // while plugins also ran in-process; once hosts went remote-only it meant the
+  // budget was dead everywhere.
+  //
+  // All optional, so an older endpoint simply ignores them (zod strips unknown
+  // keys) and a newer endpoint called by an older host still gets its ceiling.
+  /** Most records the host can actually use — plugins cap their fetch at this. */
+  maxResults: z.number().int().positive().optional(),
+  /** Risk floor, so a source with a severity field can filter upstream. */
+  minRiskLevel: z.enum(['low', 'moderate', 'high', 'severe', 'extreme']).optional(),
+  /** Which slice to keep when the plugin must cut: the worst, or the latest. */
+  rank: z.enum(['severity', 'recency']).optional(),
 });
 
 /** Response body of `POST {endpoint}/alerts` (mirror of {@link PluginFetchResult}). */

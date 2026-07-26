@@ -146,6 +146,13 @@ export class RemotePlugin implements AlertPlugin {
         limit: options.limit,
         categories: options.categories,
         temporalTypes: options.temporalTypes,
+        // The fetch budget. Omitted here until 1.7.4, which quietly defeated it
+        // for every federated plugin: the endpoint saw no budget and fell back
+        // to its own ceiling, so a host asking for 50 alerts still pulled
+        // thousands over the wire and threw nearly all of them away.
+        maxResults: options.maxResults,
+        minRiskLevel: options.minRiskLevel,
+        rank: options.rank,
       });
     const result = this.breaker ? await this.breaker.execute(doFetch) : await doFetch();
     // Wire shape is validated by the client against the published Alert schema.
