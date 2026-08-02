@@ -34,6 +34,40 @@ export const CONTRACT_VERSION_HEADER = 'x-contract-version';
 /** Canonical route action names under a plugin's `{endpoint}/plugins/{id}`. */
 export const MANIFEST_ACTION = 'manifest' as const;
 export const ALERTS_ACTION = 'alerts' as const;
+export const HEALTH_ACTION = 'health' as const;
+
+/**
+ * Outcome of a health probe. Three states, because two cannot tell the
+ * difference between "this source has nothing to report" and "this source is
+ * broken" — and for a risk feed those demand opposite responses.
+ *
+ * - `healthy`   — reached the source, got records.
+ * - `quiet`     — reached the source, got nothing, and nothing was expected.
+ *                 A dry day for a flood feed. Not a fault.
+ * - `unhealthy` — the fetch failed, or returned nothing when data was expected.
+ */
+export type PluginHealthStatus = 'healthy' | 'quiet' | 'unhealthy';
+
+export interface PluginHealthResult {
+  pluginId: string;
+  status: PluginHealthStatus;
+  /** Records the probe actually retrieved. Absent when the fetch threw. */
+  recordCount?: number;
+  /** Whether an empty result should be read as a failure (from `expectData`). */
+  expectedData: boolean;
+  latencyMs: number;
+  checkedAt: string;
+  /** The window and place actually probed — so a caller can tell what was asked. */
+  probe: {
+    latitude: number;
+    longitude: number;
+    radiusMeters: number;
+    start: string;
+    end: string;
+  };
+  /** Present only when `status` is `unhealthy` and the cause was an error. */
+  error?: string;
+}
 
 /**
  * Build the canonical, deployment-independent request path for a plugin action.

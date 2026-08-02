@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-08-02
+
+### Added
+- **`GET /plugins/{id}/health` — a plugin answers for its own health.** A third
+  wire action alongside `manifest` and `alerts`, authenticated with the same
+  bearer + HMAC scheme, so a host can ask "is this feed working?" without
+  knowing anything about the feed.
+
+  The verdict has **three** states, because two cannot tell a source with
+  nothing to report from a broken one — and for a risk feed those demand
+  opposite responses. `healthy` (records returned), `quiet` (empty, and nothing
+  was expected — a flood service on a dry day), `unhealthy` (the fetch failed,
+  or returned nothing when `expectData=true`).
+
+  Every probe parameter is optional and defaults from the plugin's **own
+  manifest**, which is the point: the plugin already declares where it covers,
+  how far behind its source runs, and whether it can see the past. A caller
+  supplying those would keep a second copy of facts the plugin owns, and that
+  copy goes stale the moment coverage or lag changes.
+
+  Two defaults exist specifically to avoid probes that return a *false* empty
+  rather than an error — the failure mode that reads as "working, nothing
+  nearby":
+
+  - The window spans **twice the declared `dataLagMinutes`**. A source running
+    120 days behind, probed over 24 hours, is indistinguishable from a dead one.
+  - A source with `supportsPast: false` is probed **forward**. Event feeds only
+    know about the future, so a backward window is unsatisfiable and always
+    returns zero.
+
+  An upstream failure answers **HTTP 200 with `status: 'unhealthy'`**, not 5xx:
+  "this plugin's upstream is down" and "the plugin service is down" are
+  different failures, and a caller has to be able to separate them.
+
+  Additive — no contract-version bump. Plugins are untouched; the adapter
+  converts the relative window to the absolute `timeRange` they already take.
+
+
 ## [1.7.4] - 2026-07-26
 
 ### Fixed
