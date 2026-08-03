@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-03
+
+### Added
+- **A health probe now answers within its own budget instead of being cut off.**
+  `/plugins/{id}/health` bounds its upstream fetch (default 20s, `healthTimeoutMs`
+  or `?timeoutMs=`) and reports `unhealthy` with `probe exceeded Nms` when it runs
+  long.
+
+  The point is to answer *before* the caller's deadline. API Gateway cuts a
+  request at 29s and returns an opaque 504, which cannot distinguish a slow
+  upstream from a dead plugin service — the exact ambiguity the three-state
+  verdict exists to remove. Observed on dev: `airnow` and `uk-flood` both 504'd
+  and told the caller nothing.
+
+  "Too slow to be usable" is itself a useful verdict. The in-flight fetch is
+  abandoned rather than cancelled, which costs the invocation nothing.
+
+
 ## [2.0.0] - 2026-08-03
 
 ### Changed

@@ -25,6 +25,7 @@ interface FakeOptions {
   id: string;
   alerts?: number;
   throws?: string;
+  hangMs?: number;
   supportsPast?: boolean;
   supportsFuture?: boolean;
   dataLagMinutes?: number;
@@ -68,6 +69,7 @@ class FakePlugin implements AlertPlugin {
 
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
     this.lastCall = options;
+    if (this.opts.hangMs) await new Promise((r) => setTimeout(r, this.opts.hangMs));
     if (this.opts.throws) throw new Error(this.opts.throws);
     return {
       alerts: Array.from({ length: this.opts.alerts ?? 0 }, (_, i) => ({
@@ -244,6 +246,24 @@ describe('plugin-service /health', () => {
     const { statusCode, body } = await probe(new FakePlugin({ id: 'p8', alerts: 1 }));
     expect(statusCode).toBe(400);
     expect(body.message).toContain('lat');
+  });
+
+  it('answers a verdict rather than hanging past its budget', async () => {
+    // Without this the caller's gateway cuts the request off — API Gateway at
+    // 29s — and returns an opaque 504 that cannot distinguish a slow upstream
+    // from a dead service. Both `airnow` and `uk-flood` did exactly that on dev.
+    const plugin = new FakePlugin({ id: 'p10', alerts: 5, center, hangMs: 300 });
+    const { statusCode, body } = await probe(plugin, { timeoutMs: '50' });
+    expect(statusCode).toBe(200);
+    expect(body.status).toBe('unhealthy');
+    expect(body.error).toContain('50ms');
+  });
+
+  it('does not fire the timeout when the probe finishes in time', async () => {
+    const plugin = new FakePlugin({ id: 'p11', alerts: 5, center, hangMs: 10 });
+    const { body } = await probe(plugin, { timeoutMs: '2000' });
+    expect(body.status).toBe('healthy');
+    expect(body.recordCount).toBe(5);
   });
 
   it('rejects an unsigned request', async () => {

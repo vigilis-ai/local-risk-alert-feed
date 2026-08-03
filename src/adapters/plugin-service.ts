@@ -39,6 +39,35 @@ export interface PluginServiceOptions {
   supportsPush?: (pluginId: string) => boolean;
   /** Signature replay tolerance in ms (default: library default). */
   signatureToleranceMs?: number;
+  /**
+   * How long a `/health` probe may take before it gives up and reports
+   * `unhealthy` (default 20s).
+   *
+   * This exists to stay **under** the caller's own deadline — API Gateway cuts a
+   * request off at 29s with an opaque 504, which tells the caller nothing about
+   * whether the plugin service is down or one upstream is merely slow. Answering
+   * first, with a reason, is the whole point of the health action.
+   */
+  healthTimeoutMs?: number;
+}
+
+/** Resolve to a sentinel rather than reject, so the caller can tell the two apart. */
+const PROBE_TIMED_OUT = Symbol('probe-timed-out');
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | typeof PROBE_TIMED_OUT> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(PROBE_TIMED_OUT), ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
 }
 
 export type PluginServiceHandler = (
@@ -221,13 +250,34 @@ export function createPluginServiceHandler(options: PluginServiceOptions): Plugi
           },
         };
 
+        const budgetMs = num(q.timeoutMs) ?? options.healthTimeoutMs ?? 20_000;
+
         try {
-          const result = await plugin.fetchAlerts({
-            location: { latitude: probe.latitude, longitude: probe.longitude },
-            radiusMeters: probe.radiusMeters,
-            timeRange: { start: probe.start.toISOString(), end: probe.end.toISOString() },
-            limit: num(q.limit) ?? 25,
-          });
+          const result = await withTimeout(
+            plugin.fetchAlerts({
+              location: { latitude: probe.latitude, longitude: probe.longitude },
+              radiusMeters: probe.radiusMeters,
+              timeRange: { start: probe.start.toISOString(), end: probe.end.toISOString() },
+              limit: num(q.limit) ?? 25,
+            }),
+            budgetMs
+          );
+
+          if (result === PROBE_TIMED_OUT) {
+            // "Too slow to be usable" IS a health verdict, and a far more useful
+            // one than the 504 the caller's gateway would otherwise produce —
+            // that failure mode cannot distinguish a slow upstream from a dead
+            // service. The in-flight fetch is abandoned, not cancelled; it costs
+            // this invocation nothing to let it finish unobserved.
+            const health: PluginHealthResult = {
+              ...shape,
+              status: 'unhealthy',
+              latencyMs: Date.now() - startedAt,
+              error: `probe exceeded ${budgetMs}ms`,
+            };
+            return json(200, health);
+          }
+
           const recordCount = result.alerts.length;
           const health: PluginHealthResult = {
             ...shape,
