@@ -13,6 +13,7 @@ const LOCATION = { latitude: 47.6, longitude: -122.33 };
 function metadata(id: string): PluginMetadata {
   return {
     id,
+    health: { expectsData: false },
     name: id,
     version: '1.0.0',
     description: id,

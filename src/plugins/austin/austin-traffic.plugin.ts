@@ -78,6 +78,7 @@ const ISSUE_TYPE_RISK_MAP: Record<string, RiskLevel> = {
 export class AustinTrafficPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'austin-traffic',
+    health: { expectsData: true },
     name: 'Austin Traffic',
     version: '1.0.0',
     description: 'Real-time traffic incidents from Austin, Texas',

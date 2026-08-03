@@ -220,6 +220,7 @@ const LOW_PRIORITY_TYPES = new Set([
 export class SeattlePolicePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'seattle-police',
+    health: { expectsData: true },
     name: 'Seattle Police Department',
     version: '1.0.0',
     description: 'Police calls for service from Seattle Police Department',

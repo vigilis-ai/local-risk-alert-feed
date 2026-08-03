@@ -111,6 +111,7 @@ const CATEGORY_MAP: Record<string, { category: AlertCategory; risk: RiskLevel }>
 export class GlendaleFirePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'glendale-fire',
+    health: { expectsData: false },
     name: 'Glendale Area Fire & EMS',
     version: '1.1.0',
     description: 'Fire and EMS incidents near Glendale, AZ from Phoenix Regional Dispatch',

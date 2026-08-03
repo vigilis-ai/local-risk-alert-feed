@@ -340,6 +340,7 @@ function classifyByText(text: string): { category: AlertCategory; risk: RiskLeve
 export class GlendalePolicePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'glendale-police',
+    health: { expectsData: false },
     name: 'Glendale Police Department',
     version: '1.1.0',
     description: 'Police calls for service from Glendale, AZ Police Department',

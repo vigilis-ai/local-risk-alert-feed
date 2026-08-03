@@ -109,6 +109,20 @@ export const PluginMetadataSchema = z.object({
   supportedCategories: z.array(AlertCategorySchema),
   refreshIntervalMs: z.number().optional(),
   defaultRadiusMeters: z.number().optional(),
+  /**
+   * Optional ON THE WIRE even though it is required when authoring a plugin.
+   * The two sides of a federation boundary deploy independently, so a host on a
+   * newer contract will meet endpoints that predate this field. Rejecting their
+   * manifests would take working feeds offline over metadata the host can
+   * safely default.
+   */
+  health: z
+    .object({
+      expectsData: z.boolean(),
+      probePoint: GeoPointSchema.optional(),
+      probeRadiusMeters: z.number().optional(),
+    })
+    .optional(),
 });
 
 /**

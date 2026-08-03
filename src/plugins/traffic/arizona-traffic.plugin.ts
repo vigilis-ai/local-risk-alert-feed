@@ -112,6 +112,7 @@ const EVENT_TYPE_RISK_MAP: Record<string, RiskLevel> = {
 export class ArizonaTrafficPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'arizona-traffic',
+    health: { expectsData: true },
     name: 'Arizona Traffic',
     version: '1.0.0',
     description: 'Traffic incidents, road closures, and construction for Arizona',

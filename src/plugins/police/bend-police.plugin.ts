@@ -149,6 +149,7 @@ const LOW_PRIORITY_SQL_LIST = Array.from(LOW_PRIORITY_TYPES)
 export class BendPolicePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'bend-police',
+    health: { expectsData: true },
     name: 'Bend Police Department',
     version: '1.0.0',
     description: 'Police calls for service from Bend, Oregon Police Department',

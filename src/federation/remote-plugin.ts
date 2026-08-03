@@ -77,6 +77,9 @@ export class RemotePlugin implements AlertPlugin {
       name: this.id,
       version: '0.0.0',
       description: 'Remote plugin (manifest not yet loaded)',
+      // An unloaded plugin makes no claim about its data. `false` keeps a probe
+      // against it from reporting a failure before the real manifest arrives.
+      health: { expectsData: false },
       coverage: { type: 'regional', description: 'unloaded' },
       temporal: {
         supportsPast: false,
@@ -101,7 +104,12 @@ export class RemotePlugin implements AlertPlugin {
         `manifest id "${manifest.metadata.id}" does not match registration id "${this.id}"`
       );
     }
-    this._metadata = manifest.metadata;
+    // An endpoint older than the health contract sends no `health` block.
+    // Default it rather than refusing the manifest — see PluginMetadataSchema.
+    this._metadata = {
+      ...manifest.metadata,
+      health: manifest.metadata.health ?? { expectsData: false },
+    };
     this.loaded = true;
     this.loadedAt = this.now();
   }

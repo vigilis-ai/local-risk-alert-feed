@@ -204,6 +204,7 @@ const OFFENSE_RISK_MAP: Record<string, RiskLevel> = {
 export class AtlantaCrimePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'atlanta-crime',
+    health: { expectsData: true },
     name: 'Atlanta Police Department Crime Reports',
     version: '1.0.0',
     description: 'NIBRS crime incidents from the Atlanta Police Department',

@@ -138,6 +138,7 @@ const GLENDALE_VENUES: Record<string, { latitude: number; longitude: number; des
 export class GlendaleEventsPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'glendale-events',
+    health: { expectsData: true },
     name: 'Glendale Events',
     version: '1.0.0',
     description: 'Events from Ticketmaster for Glendale Sports & Entertainment District',

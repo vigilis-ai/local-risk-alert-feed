@@ -85,6 +85,7 @@ const MEDICAL_TYPE_RISK_MAP: Record<string, RiskLevel> = {
 export class SeattleEMTPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'seattle-emt',
+    health: { expectsData: true },
     name: 'Seattle Fire Department EMS',
     version: '1.0.0',
     description: 'Real-time medical/EMS incidents from Seattle Fire Department 911 dispatch',

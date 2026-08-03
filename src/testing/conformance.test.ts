@@ -9,6 +9,7 @@ import { runConformanceSuite } from './conformance';
 class GoodPlugin implements AlertPlugin {
   readonly metadata = {
     id: 'good-weather',
+    health: { expectsData: false },
     name: 'Good Weather',
     version: '1.0.0',
     description: 'conformant test plugin',

@@ -114,6 +114,7 @@ const CATEGORY_MAP: Record<string, { category: AlertCategory; risk: RiskLevel }>
 export class PhoenixFirePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'phoenix-fire',
+    health: { expectsData: true },
     name: 'Phoenix Fire Department',
     version: '2.0.0',
     description: 'Fire and EMS incidents from Phoenix Regional Dispatch Center',

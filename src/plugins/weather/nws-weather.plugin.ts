@@ -120,6 +120,7 @@ export interface NWSWeatherPluginConfig extends BasePluginConfig {
 export class NWSWeatherPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'nws-weather',
+    health: { expectsData: true, probePoint: { latitude: 33.4484, longitude: -112.074 } },
     name: 'National Weather Service',
     version: '1.0.0',
     description: 'Weather alerts from the National Weather Service (US)',

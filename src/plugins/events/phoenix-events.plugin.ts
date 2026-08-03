@@ -99,6 +99,7 @@ const PHOENIX_VENUES: Record<string, { latitude: number; longitude: number }> = 
 export class PhoenixEventsPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'phoenix-events',
+    health: { expectsData: true },
     name: 'Phoenix Events',
     version: '2.0.0',
     description: 'Events from Ticketmaster Discovery API',

@@ -82,6 +82,7 @@ const VENUE_COORDINATES: Record<string, { latitude: number; longitude: number }>
 export class AustinEventsPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'austin-events',
+    health: { expectsData: true },
     name: 'Austin Events',
     version: '1.0.0',
     description: 'Events from Austin Convention Center, Palmer Events Center, and special events permits',

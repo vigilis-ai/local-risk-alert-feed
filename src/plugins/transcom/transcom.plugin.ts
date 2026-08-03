@@ -162,6 +162,7 @@ const EVENT_TYPE_RISK: Record<string, RiskLevel> = {
 export class TRANSCOMPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'transcom',
+    health: { expectsData: false },
     name: 'TRANSCOM (NY/NJ/CT Events)',
     version: '0.1.0',
     description: 'Real-time tri-state transportation events (incl. Port Authority, PATH, NJ agencies)',

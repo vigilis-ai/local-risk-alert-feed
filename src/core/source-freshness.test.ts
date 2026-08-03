@@ -15,6 +15,7 @@ const DAY_MS = 24 * 60 * MINUTE_MS;
 function metadata(id: string, dataLagMinutes?: number): PluginMetadata {
   return {
     id,
+    health: { expectsData: false },
     name: `${id} feed`,
     version: '1.0.0',
     description: id,

@@ -91,6 +91,7 @@ const SEVERITY_RISK_MAP: Record<string, RiskLevel> = {
 export class AtlantaTrafficPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'atlanta-traffic',
+    health: { expectsData: false },
     name: 'Atlanta Traffic (Georgia 511)',
     version: '1.0.0',
     description: 'Traffic incidents, road closures, and construction for the Atlanta metro',

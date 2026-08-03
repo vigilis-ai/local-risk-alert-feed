@@ -83,6 +83,7 @@ const ALERT_TYPE_RISK: Record<string, RiskLevel> = {
 export class MTAAlertsPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'mta-alerts',
+    health: { expectsData: true },
     name: 'MTA Subway Service Alerts',
     version: '1.0.0',
     description: 'Subway delays, suspensions, reroutes, and planned work from the MTA',

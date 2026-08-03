@@ -103,6 +103,7 @@ export function mapWorkZoneRisk(description?: string, vehicleImpact?: string): R
 export class NJWorkZonesPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'nj-workzones',
+    health: { expectsData: false },
     name: 'New Jersey Work Zones (WZDx)',
     version: '1.0.0',
     description: 'Active road work zones and lane closures for Jersey City / northern NJ',

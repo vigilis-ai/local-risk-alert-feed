@@ -97,6 +97,7 @@ const SEVERITY_RISK_MAP: Record<string, RiskLevel> = {
 export class NYCTrafficPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'nyc-traffic',
+    health: { expectsData: false },
     name: 'NYC Traffic (511NY)',
     version: '1.0.0',
     description: 'Traffic incidents, road closures, and construction for the NYC metro',

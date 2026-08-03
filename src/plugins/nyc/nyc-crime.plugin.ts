@@ -117,6 +117,7 @@ const LAW_CATEGORY_RISK: Record<string, RiskLevel> = {
 export class NYCCrimePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'nyc-crime',
+    health: { expectsData: true },
     name: 'NYPD Complaint Data',
     version: '1.0.0',
     description: 'Felony, misdemeanor, and violation complaints from the NYPD',

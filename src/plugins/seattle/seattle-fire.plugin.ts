@@ -97,6 +97,7 @@ const FIRE_TYPE_RISK_MAP: Record<string, RiskLevel> = {
 export class SeattleFirePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'seattle-fire',
+    health: { expectsData: false },
     name: 'Seattle Fire Department',
     version: '1.0.0',
     description: 'Real-time fire incidents from Seattle Fire Department 911 dispatch',

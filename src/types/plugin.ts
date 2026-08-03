@@ -90,6 +90,42 @@ export interface PluginMetadata {
   refreshIntervalMs?: number;
   /** Default query radius in meters when the caller does not specify one */
   defaultRadiusMeters?: number;
+  /** How this plugin is health-checked. Required — see {@link PluginHealthConfig}. */
+  health: PluginHealthConfig;
+}
+
+/**
+ * How a plugin is health-checked.
+ *
+ * This is deliberately part of the manifest rather than caller configuration.
+ * Everything here is a fact about the source that only the plugin knows, and
+ * every previous home for it — a `Set` in a seeder script, a structured query on
+ * a registry record — was a copy that went stale the moment the plugin changed.
+ */
+export interface PluginHealthConfig {
+  /**
+   * Whether an empty result means the source is broken.
+   *
+   * **Required, with no default, because it cannot be inferred and both wrong
+   * answers are costly.** A source that is legitimately quiet much of the time
+   * — flood warnings, weather alerts, an air-quality feed below its threshold —
+   * must be `false`, or it alarms on every ordinary day and the alerting gets
+   * ignored. A source that always has data must be `true`, or the day it dies
+   * it answers "nothing happening" forever, which is exactly what a health
+   * check exists to catch.
+   *
+   * Whoever writes the plugin knows which it is; nobody downstream does.
+   */
+  expectsData: boolean;
+  /**
+   * Where to probe. Needed only when `coverage` declares no centre — a global
+   * source has no natural point, but "anywhere" is not a usable probe either:
+   * an air-quality feed queried mid-ocean returns nothing however healthy it is.
+   * Pick somewhere this source reliably has data.
+   */
+  probePoint?: GeoPoint;
+  /** Probe radius override, when the plugin's default is a poor health signal. */
+  probeRadiusMeters?: number;
 }
 
 /**

@@ -106,6 +106,7 @@ export interface FAAAirportStatusPluginConfig extends BasePluginConfig {
 export class FAAAirportStatusPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'faa-airport-status',
+    health: { expectsData: false, probePoint: { latitude: 33.4484, longitude: -112.074 } },
     name: 'FAA Airport Status',
     version: '1.0.0',
     description: 'Ground stops, ground delay programs, and closures at major US airports',

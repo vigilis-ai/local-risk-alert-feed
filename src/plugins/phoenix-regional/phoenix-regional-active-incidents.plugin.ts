@@ -206,6 +206,7 @@ export function classifyIncident(
 export class PhoenixRegionalActiveIncidentsPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'phoenix-regional-active-incidents',
+    health: { expectsData: true },
     name: 'Phoenix Regional Dispatch — Active Incidents',
     version: '1.0.0',
     description:

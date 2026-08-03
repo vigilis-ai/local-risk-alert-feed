@@ -95,6 +95,7 @@ const FIRE_TYPE_RISK_MAP: Record<string, RiskLevel> = {
 export class AustinFirePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'austin-fire',
+    health: { expectsData: false },
     name: 'Austin Fire Department',
     version: '1.0.0',
     description: 'Real-time fire incidents from Austin Fire Department',

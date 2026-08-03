@@ -109,6 +109,7 @@ function getFireRiskLevel(acres: number | undefined, percentContained: number | 
 export class NIFCWildfirePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'nifc-wildfire',
+    health: { expectsData: false },
     name: 'NIFC Wildfires',
     version: '1.0.0',
     description: 'Active wildfire incidents from National Interagency Fire Center',

@@ -84,13 +84,20 @@ function buildProbe(
   metadata: AlertPlugin['metadata'],
   q: Record<string, string | undefined>
 ): { latitude: number; longitude: number; radiusMeters: number; start: Date; end: Date } | null {
-  const latitude = num(q.lat) ?? metadata.coverage?.center?.latitude;
-  const longitude = num(q.lng) ?? metadata.coverage?.center?.longitude;
-  // A global/national source has no center to probe; the caller must say where.
+  // Precedence throughout: query parameter → manifest → derived default. The
+  // override exists so a feed can be re-probed elsewhere during an incident
+  // without cutting a plugin release.
+  const latitude =
+    num(q.lat) ?? metadata.health?.probePoint?.latitude ?? metadata.coverage?.center?.latitude;
+  const longitude =
+    num(q.lng) ?? metadata.health?.probePoint?.longitude ?? metadata.coverage?.center?.longitude;
+  // A global source has no coverage centre. It should declare a probePoint; if
+  // it declares neither, the caller has to say where.
   if (typeof latitude !== 'number' || typeof longitude !== 'number') return null;
 
   const radiusMeters =
     num(q.radiusMeters) ??
+    metadata.health?.probeRadiusMeters ??
     metadata.defaultRadiusMeters ??
     metadata.coverage?.radiusMeters ??
     15_000;
@@ -191,14 +198,14 @@ export function createPluginServiceHandler(options: PluginServiceOptions): Plugi
         if (!probe) {
           return json(400, {
             error: 'Validation Error',
-            message: `plugin "${route.id}" declares no coverage center; pass lat and lng`,
+            message: `plugin "${route.id}" declares neither a coverage centre nor health.probePoint; pass lat and lng`,
           });
         }
-        // Default false: an empty result is only a failure for a source that is
-        // *supposed* to always have something. Defaulting true would mark every
-        // legitimately quiet feed — a flood warning service on a dry day —
-        // unhealthy, and an alarm that cries wolf gets ignored.
-        const expectedData = q.expectData === 'true';
+        // The plugin declares this; a caller may override it for a one-off
+        // probe. There is no framework default — see PluginHealthConfig for why
+        // guessing either way is costly.
+        const expectedData =
+          q.expectData !== undefined ? q.expectData === 'true' : plugin.metadata.health.expectsData;
         const startedAt = Date.now();
         const checkedAt = new Date().toISOString();
         const shape = {

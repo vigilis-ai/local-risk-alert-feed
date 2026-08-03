@@ -94,6 +94,7 @@ const AQI_CATEGORY_DESCRIPTIONS: Record<number, string> = {
 export class AirNowPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'airnow',
+    health: { expectsData: true, probePoint: { latitude: 33.4484, longitude: -112.074 } },
     name: 'AirNow Air Quality',
     version: '1.0.0',
     description: 'Air quality index (AQI) data from EPA AirNow',

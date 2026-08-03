@@ -83,6 +83,7 @@ const HIGH_IMPACT_KEYWORDS = [
 export class PhoenixConventionCenterPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'phoenix-convention-center',
+    health: { expectsData: true },
     name: 'Phoenix Convention Center',
     version: '1.0.0',
     description: 'Events from Phoenix Convention Center, Orpheum Theatre, and Symphony Hall',

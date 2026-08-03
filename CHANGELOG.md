@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-03
+
+### Changed
+- **BREAKING: `PluginMetadata.health.expectsData` is required.** Whether an empty
+  result means a source is broken is a fact only the plugin author knows, and it
+  had been living everywhere else — a hardcoded `Set` in a seeding script in
+  another repository, then a query parameter on a registry record. Every one of
+  those was a copy that went stale the moment a plugin changed.
+
+  It is required rather than defaulted because **both wrong answers are costly**
+  and neither can be inferred. Default it to `true` and every legitimately quiet
+  feed — flood warnings, weather alerts, an air-quality reading below its
+  threshold — alarms on an ordinary day until the alerting is ignored. Default it
+  to `false` and the day a source dies it answers "nothing happening" forever,
+  which is the exact failure a health check exists to catch. Requiring it makes
+  the decision unskippable at authoring time; `tsc` names every plugin that has
+  not made it.
+
+  `health.probePoint` is optional and answers the other half: a global source has
+  no coverage centre, but "anywhere" is not a usable probe either — an
+  air-quality feed queried mid-ocean returns nothing however healthy it is. The
+  plugin names a point where its data is real.
+
+  Precedence is query parameter → manifest → derived default, so a feed can
+  still be re-probed elsewhere during an incident without cutting a release.
+
+  **The wire schema keeps `health` optional on purpose.** The two sides of a
+  federation boundary deploy independently, so a host on this contract will meet
+  endpoints that predate the field; rejecting their manifests would take working
+  feeds offline over metadata the host can safely default. `RemotePlugin` fills
+  `{ expectsData: false }` when it is absent.
+
+
 ## [1.8.1] - 2026-08-03
 
 ### Fixed

@@ -19,6 +19,7 @@ import { createPluginServiceHandler } from '../adapters/plugin-service';
 class FakeWeatherPlugin implements AlertPlugin {
   readonly metadata = {
     id: 'fake-weather',
+    health: { expectsData: false },
     name: 'Fake Weather',
     version: '1.0.0',
     description: 'test',

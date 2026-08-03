@@ -29,6 +29,8 @@ interface FakeOptions {
   supportsFuture?: boolean;
   dataLagMinutes?: number;
   center?: GeoPoint;
+  expectsData?: boolean;
+  probePoint?: GeoPoint;
 }
 
 /** Records the options it was called with, so tests can assert the derived window. */
@@ -53,6 +55,10 @@ class FakePlugin implements AlertPlugin {
       },
       supportedTemporalTypes: ['real-time' as const],
       supportedCategories: ['weather' as const],
+      health: {
+        expectsData: opts.expectsData ?? false,
+        ...(opts.probePoint ? { probePoint: opts.probePoint } : {}),
+      },
     };
   }
 
@@ -204,7 +210,37 @@ describe('plugin-service /health', () => {
     expect(plugin.lastCall!.radiusMeters).toBe(5000);
   });
 
-  it('asks for a location when the plugin declares no coverage center', async () => {
+  it('takes expectsData from the manifest when the caller says nothing', async () => {
+    // The whole reason this is required on PluginMetadata: the plugin author
+    // knows whether empty means broken, and nothing downstream does.
+    const { body } = await probe(
+      new FakePlugin({ id: 'p7b', alerts: 0, center, expectsData: true }),
+    );
+    expect(body.status).toBe('unhealthy');
+    expect(body.expectedData).toBe(true);
+  });
+
+  it('lets a caller override the manifest for a one-off probe', async () => {
+    const { body } = await probe(
+      new FakePlugin({ id: 'p7c', alerts: 0, center, expectsData: true }),
+      { expectData: 'false' },
+    );
+    expect(body.status).toBe('quiet');
+  });
+
+  it('uses the manifest probePoint for a source with no coverage centre', async () => {
+    // A global source has no centre, but "anywhere" is not a usable probe
+    // either — an air-quality feed queried mid-ocean returns nothing however
+    // healthy it is. The plugin names a point where its data is real.
+    const phoenix = { latitude: 33.4484, longitude: -112.074 };
+    const plugin = new FakePlugin({ id: 'p8b', alerts: 2, probePoint: phoenix });
+    const { statusCode, body } = await probe(plugin);
+    expect(statusCode).toBe(200);
+    expect(body.status).toBe('healthy');
+    expect(plugin.lastCall!.location).toEqual(phoenix);
+  });
+
+  it('asks for a location when the plugin declares neither centre nor probePoint', async () => {
     const { statusCode, body } = await probe(new FakePlugin({ id: 'p8', alerts: 1 }));
     expect(statusCode).toBe(400);
     expect(body.message).toContain('lat');

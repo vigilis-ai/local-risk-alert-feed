@@ -48,6 +48,7 @@ export interface PhoenixCrimeRiskPluginConfig extends BaselineRiskPluginConfig {
 export class PhoenixCrimeRiskPlugin extends BaselineRiskPlugin {
   readonly metadata: PluginMetadata = {
     id: 'phoenix-crime-risk',
+    health: { expectsData: true },
     name: 'Phoenix Crime Risk (baseline)',
     version: '1.0.0',
     description: 'Relative crime-risk score per area from City of Phoenix open crime data',

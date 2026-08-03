@@ -141,6 +141,7 @@ const CRIME_TYPE_RISK_MAP: Record<string, RiskLevel> = {
 export class AustinCrimePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
     id: 'austin-crime',
+    health: { expectsData: true },
     name: 'Austin Police Department Crime Reports',
     version: '1.0.0',
     description: 'Crime reports from Austin Police Department',
