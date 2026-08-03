@@ -161,6 +161,24 @@ describe('plugin-service /health', () => {
     expect(spanHours).toBeGreaterThanOrEqual(240 * 24);
   });
 
+  it('probes BOTH directions for a source that can see both', async () => {
+    // A forecast source — weather, air quality. Tying the forward window to
+    // `!supportsPast` gave these a backward-only probe, so an alert issued for
+    // tomorrow was invisible and, with expectData=true, read as a failure while
+    // the source was working perfectly.
+    const plugin = new FakePlugin({
+      id: 'p6b',
+      alerts: 1,
+      center,
+      supportsPast: true,
+      supportsFuture: true,
+    });
+    await probe(plugin);
+    const { start, end } = plugin.lastCall!.timeRange;
+    expect(Date.parse(start)).toBeLessThan(Date.now());
+    expect(Date.parse(end)).toBeGreaterThan(Date.now());
+  });
+
   it('probes forward for a source that cannot see the past', async () => {
     // Event feeds only know about the future; a backward window is unsatisfiable.
     const plugin = new FakePlugin({

@@ -99,8 +99,16 @@ function buildProbe(
   const supportsPast = metadata.temporal?.supportsPast ?? true;
   const supportsFuture = metadata.temporal?.supportsFuture ?? false;
 
+  // The two directions are independent. Tying the forward window to
+  // `!supportsPast` would give a source that can see BOTH — a weather or
+  // air-quality forecast — a backward-only probe, and an alert issued for
+  // tomorrow is invisible looking backwards. With `expectData=true` that reads
+  // as a failure when the source is working perfectly.
+  //
+  // Widening a probe can only add records, never remove them, so an over-long
+  // forward window is safe in a way an over-short one is not.
   const lookbackHours = num(q.lookbackHours) ?? (supportsPast ? Math.max(24, lagHours * 2) : 0);
-  const lookaheadHours = num(q.lookaheadHours) ?? (supportsPast ? 0 : supportsFuture ? 720 : 0);
+  const lookaheadHours = num(q.lookaheadHours) ?? (supportsFuture ? 720 : 0);
 
   const now = Date.now();
   return {

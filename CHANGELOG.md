@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-08-03
+
+### Fixed
+- **A source that can see both past and future got a backward-only health
+  probe.** The forward window was derived from `!supportsPast`, so it only
+  opened for future-only feeds. Forecast sources — weather, air quality — set
+  *both* flags, and an alert issued for tomorrow is invisible looking backwards.
+  With `expectData=true` that reported a working source as failing.
+
+  The two directions are now independent: look back if `supportsPast`, look
+  forward if `supportsFuture`. Widening a probe can only add records, so an
+  over-long forward window is safe in a way an over-short one is not.
+
+
 ## [1.8.0] - 2026-08-02
 
 ### Added
