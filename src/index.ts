@@ -194,5 +194,6 @@ export {
   PluginMetadataSchema,
   PluginFetchOptionsSchema,
   PluginFetchResultSchema,
+  parsePluginFetchResultLenient,
 } from './contract';
 export type { PluginManifest, PluginFetchOptionsWire, PluginFetchResultWire } from './contract';

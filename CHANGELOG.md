@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-17
+
+### Fixed
+- **One malformed alert no longer discards every other alert from that plugin.**
+  `PluginFetchResultSchema` validates `z.array(AlertSchema)`, and zod fails the
+  whole array on the first bad element — while `federation/client.ts` called
+  `.parse()` on it. So a provider sending `url: "county bulletin board"` (or a
+  relative path, or `""`) did not merely lose its link: it took the entire
+  response down as a thrown error, and the feed went dark with nothing said to
+  the user. Measured before the fix — a batch of four containing one malformed
+  `url` parsed to **zero kept**.
+
+  The runtime path now validates each alert on its own
+  (`parsePluginFetchResultLenient`). Anything genuinely unusable is dropped
+  alone, and the count is appended to `warnings` so a bad feed is visible rather
+  than merely quiet.
+
+- **A malformed OPTIONAL field degrades instead of rejecting the alert.**
+  `AlertSchemaLenient` drops a value that fails validation and keeps the record:
+  `url`, the offset datetimes (`eventStart` / `eventEnd` / `expires`),
+  `radiusMeters`, the address strings, `externalId` and `metadata`. Required
+  fields are unchanged — an alert with no location or no `issued` timestamp
+  still cannot be rendered and is still dropped.
+
+  `url` in particular is now safe for third-party providers to start populating.
+  It has always been carried end to end (contract, wire schema, and five of the
+  bundled plugins already set it); what was unsafe was getting it slightly wrong.
+
+### Unchanged
+- **`AlertSchema` and `PluginFetchResultSchema` stay strict.** The conformance
+  suite asserts against them at error level, and a plugin emitting an invalid
+  alert *should* fail conformance and be fixed. The tolerance above is runtime
+  only, where the alternative is showing a guard nothing.
+
+
 ## [2.1.0] - 2026-08-03
 
 ### Added

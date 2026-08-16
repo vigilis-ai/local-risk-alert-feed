@@ -18,6 +18,8 @@ import { z } from 'zod';
 import {
   GeoPointSchema,
   AlertSchema,
+  AlertSchemaLenient,
+  type AlertSchemaType,
   AlertCategorySchema,
   AlertTemporalTypeSchema,
   TimeRangeSchema,
@@ -181,3 +183,53 @@ export const PluginFetchResultSchema = z.object({
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;
 export type PluginFetchOptionsWire = z.infer<typeof PluginFetchOptionsSchema>;
 export type PluginFetchResultWire = z.infer<typeof PluginFetchResultSchema>;
+
+/** Envelope only — the alerts are validated one at a time below. */
+const PluginFetchResultEnvelopeSchema = z.object({
+  alerts: z.array(z.unknown()),
+  fromCache: z.boolean().optional(),
+  cacheKey: z.string().optional(),
+  cacheExpiresAt: z.string().optional(),
+  warnings: z.array(z.string()).optional(),
+});
+
+/**
+ * Parse a plugin's alerts response for RUNTIME use, isolating bad records.
+ *
+ * `PluginFetchResultSchema` validates `z.array(AlertSchema)`, and zod fails the
+ * whole array on the first bad element — so one unusable alert discarded every
+ * other alert the plugin returned, and `federation/client.ts` calls `.parse()`,
+ * making that a thrown error and a silently dark feed. Measured before the fix:
+ * a batch of four containing one malformed `url` parsed to zero kept.
+ *
+ * Each alert is now validated on its own with {@link AlertSchemaLenient}, which
+ * additionally degrades malformed OPTIONAL fields rather than rejecting the
+ * record that carries them. Anything still unusable is dropped alone, and the
+ * count is appended to `warnings` so a bad feed is visible rather than merely
+ * quiet.
+ *
+ * The strict {@link PluginFetchResultSchema} is unchanged and is still what the
+ * conformance suite asserts against — a plugin that emits invalid alerts should
+ * fail conformance. This only governs what a guard sees when one already has.
+ */
+export function parsePluginFetchResultLenient(raw: unknown): PluginFetchResultWire {
+  const envelope = PluginFetchResultEnvelopeSchema.parse(raw);
+
+  const alerts: AlertSchemaType[] = [];
+  let dropped = 0;
+  for (const candidate of envelope.alerts) {
+    const parsed = AlertSchemaLenient.safeParse(candidate);
+    if (parsed.success) alerts.push(parsed.data as AlertSchemaType);
+    else dropped++;
+  }
+
+  const warnings =
+    dropped > 0
+      ? [
+          ...(envelope.warnings ?? []),
+          `${dropped} alert${dropped === 1 ? '' : 's'} dropped: did not satisfy the alert contract`,
+        ]
+      : envelope.warnings;
+
+  return { ...envelope, alerts, warnings } as PluginFetchResultWire;
+}

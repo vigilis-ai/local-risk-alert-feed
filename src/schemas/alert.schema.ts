@@ -132,3 +132,59 @@ export const AlertSchema = z.object({
  * Type inferred from the AlertSchema.
  */
 export type AlertSchemaType = z.infer<typeof AlertSchema>;
+
+/**
+ * Degrade an OPTIONAL field instead of failing the alert that carries it.
+ *
+ * Anything that does not satisfy `inner` becomes `undefined`. Only ever applied
+ * to fields the product can render without — never to id, title, category,
+ * location.point or timestamps.issued, where a missing value means there is no
+ * alert to show.
+ */
+function lenientOptional<T extends z.ZodTypeAny>(inner: T) {
+  return z.unknown().transform((value) => {
+    if (value === undefined || value === null) return undefined;
+    const parsed = inner.safeParse(value);
+    return parsed.success ? (parsed.data as z.infer<T>) : undefined;
+  });
+}
+
+/**
+ * The runtime counterpart of {@link AlertSchema}: same required fields, but a
+ * malformed OPTIONAL value is dropped rather than rejecting the alert.
+ *
+ * Why this exists. `url` is declared `z.string().url()`, and zod fails the whole
+ * array it sits in — so a single provider sending `url: "county bulletin board"`
+ * (or a relative path, or "") did not merely lose its link, it discarded EVERY
+ * alert in that response. Measured before the fix: a batch of four with one
+ * malformed url parsed to zero kept. `federation/client.ts` calls `.parse()`,
+ * so that surfaced as a thrown plugin error and the feed simply went dark, with
+ * nothing said to the user.
+ *
+ * The same hazard applied to every strict optional here — the offset datetimes,
+ * radiusMeters, the address strings — so all of them degrade, not just url.
+ *
+ * {@link AlertSchema} stays strict on purpose: the conformance suite asserts
+ * against it at error level, and a plugin emitting a bad url SHOULD fail
+ * conformance and be fixed. Tolerance belongs at runtime, where the alternative
+ * is showing a guard nothing.
+ */
+export const AlertSchemaLenient = AlertSchema.extend({
+  location: AlertLocationSchema.extend({
+    radiusMeters: lenientOptional(z.number().positive()),
+    address: lenientOptional(z.string()),
+    city: lenientOptional(z.string()),
+    state: lenientOptional(z.string()),
+    zipCode: lenientOptional(z.string()),
+  }),
+  timestamps: AlertTimestampsSchema.extend({
+    eventStart: lenientOptional(z.string().datetime({ offset: true })),
+    eventEnd: lenientOptional(z.string().datetime({ offset: true })),
+    expires: lenientOptional(z.string().datetime({ offset: true })),
+  }),
+  source: AlertSourceSchema.extend({
+    externalId: lenientOptional(z.string()),
+  }),
+  url: lenientOptional(z.string().url()),
+  metadata: lenientOptional(z.record(z.unknown())),
+});

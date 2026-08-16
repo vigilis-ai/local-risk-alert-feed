@@ -9,7 +9,7 @@
  */
 import {
   PluginManifestSchema,
-  PluginFetchResultSchema,
+  parsePluginFetchResultLenient,
   PluginFetchOptionsSchema,
   canonicalPath,
   MANIFEST_ACTION,
@@ -103,7 +103,10 @@ export class FederationClient {
   ): Promise<PluginFetchResultWire> {
     const body = JSON.stringify(PluginFetchOptionsSchema.parse(options));
     const raw = await this.call(endpoint, pluginId, ALERTS_ACTION, 'POST', credentials, body);
-    return PluginFetchResultSchema.parse(raw);
+    // Lenient on purpose: the strict schema fails the whole array on one bad
+    // element, so a single malformed alert took the entire feed down with it.
+    // See parsePluginFetchResultLenient.
+    return parsePluginFetchResultLenient(raw);
   }
 
   private async call(

@@ -10,6 +10,7 @@ export {
   AlertTimestampsSchema,
   AlertSourceSchema,
   AlertSchema,
+  AlertSchemaLenient,
 } from './alert.schema';
 export type { AlertSchemaType } from './alert.schema';
 
