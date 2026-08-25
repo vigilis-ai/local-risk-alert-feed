@@ -30,5 +30,7 @@ export type { CSVParseOptions } from './csv';
 
 export { ArcGisQueryError, fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from './arcgis';
 export type { ArcGisFetchOptions, ArcGisFetchResult } from './arcgis';
+export { resolveIssued, parseSocrataNumericDate } from './issued';
+export type { IssuedBasis, ResolveIssuedOptions } from './issued';
 
 export { zonedIso, offsetForZone } from './timezone';

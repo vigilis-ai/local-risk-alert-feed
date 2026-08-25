@@ -1,5 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel, Alert } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { resolveIssued } from '../../utils';
 
 /**
  * Phoenix Convention Center event structure from Ungerboeck API.
@@ -211,6 +212,13 @@ export class PhoenixConventionCenterPlugin extends BasePlugin {
     const venue = this.getVenue(event.event_type);
     const riskLevel = this.assessEventRisk(event);
 
+    // The Ungerboeck calendar publishes no per-event created/updated field, so
+    // there is no real publication instant to use. Anchor on the event's own
+    // start rather than the fetch time: `issued` then describes the record
+    // instead of the request. (Future-dated events still tie under
+    // `scoreForTriage`, which clamps `issued` to now — see utils/issued.ts.)
+    const { issued, basis: issuedBasis } = resolveIssued({ eventStart: event.start });
+
     return this.createAlert({
       id: `pcc-${event.id}`,
       externalId: event.id,
@@ -227,13 +235,14 @@ export class PhoenixConventionCenterPlugin extends BasePlugin {
         state: 'AZ',
       },
       timestamps: {
-        issued: new Date().toISOString(),
+        issued,
         eventStart: event.start,
         eventEnd: event.end,
       },
       url: event.event_url || undefined,
       metadata: {
         source: 'phoenix-convention-center',
+        issuedBasis,
         venue: venue.name,
         eventType: event.event_type,
         allDay: event.allDay === 'True',

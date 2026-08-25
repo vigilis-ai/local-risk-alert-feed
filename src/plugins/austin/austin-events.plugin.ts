@@ -1,5 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel, Alert } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { resolveIssued, parseSocrataNumericDate } from '../../utils';
 
 /**
  * Austin Convention Center event from Socrata API.
@@ -33,6 +34,13 @@ interface AustinSpecialEvent {
   type_of_road_closure?: string;
   gpslatitude?: string;
   gpslongitude?: string;
+  /**
+   * `yyyyMMddHHmmss` — when the permit was reported. The one genuinely
+   * per-record timestamp this dataset carries: 24 distinct values across the
+   * 2,000 rows sampled on 2026-08-25, against exactly **one** `:updated_at`
+   * shared by every row (a bulk-republish stamp, unusable as `issued`).
+   */
+  report_date?: string;
 }
 
 /**
@@ -304,6 +312,11 @@ export class AustinEventsPlugin extends BasePlugin {
   private transformConventionEvent(event: AustinConventionEvent): Alert {
     const venueCoords = VENUE_COORDINATES[event.location] ?? AUSTIN_CENTER;
 
+    // The ACCD listing carries no per-record publication field — its Socrata
+    // `:updated_at` is a single value shared by the whole dataset. Anchor on the
+    // event's own arrival date instead of the fetch time.
+    const { issued, basis: issuedBasis } = resolveIssued({ eventStart: event.arrive_date });
+
     return this.createAlert({
       id: `austin-conv-${this.slugify(event.event_name)}-${event.arrive_date}`,
       externalId: `${event.event_name}-${event.arrive_date}`,
@@ -320,11 +333,12 @@ export class AustinEventsPlugin extends BasePlugin {
         state: 'TX',
       },
       timestamps: {
-        issued: new Date().toISOString(),
+        issued,
         eventStart: event.arrive_date,
         eventEnd: event.depart_date,
       },
       metadata: {
+        issuedBasis,
         venue: event.location,
         website: event.website,
         source: 'convention-center',
@@ -348,6 +362,14 @@ export class AustinEventsPlugin extends BasePlugin {
     const eventStart = this.parseEventDate(event.start_date);
     const eventEnd = this.parseEventDate(event.end_date);
 
+    // `report_date` is a real per-permit timestamp; the fetch time that used to
+    // sit in `issued` was the same for every permit in the response.
+    const reportedAt = parseSocrataNumericDate(event.report_date);
+    const { issued, basis: issuedBasis } = resolveIssued({
+      published: [reportedAt],
+      eventStart: eventStart ?? undefined,
+    });
+
     return this.createAlert({
       id: `austin-special-${event.folderrsn}`,
       externalId: event.folderrsn,
@@ -364,11 +386,13 @@ export class AustinEventsPlugin extends BasePlugin {
         state: 'TX',
       },
       timestamps: {
-        issued: new Date().toISOString(),
+        issued,
         eventStart: eventStart?.toISOString(),
         eventEnd: eventEnd?.toISOString(),
       },
       metadata: {
+        issuedBasis,
+        reportedAt,
         permitId: event.folderrsn,
         organization: event.event_applicant_organization,
         tier: event.tier_type,

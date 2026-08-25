@@ -1,5 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel, Alert } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { resolveIssued } from '../../utils';
 
 /**
  * Ticketmaster event structure (simplified).
@@ -23,6 +24,18 @@ interface TicketmasterEvent {
     status?: {
       code: string;
     };
+  };
+  /**
+   * Ticketmaster's own publication dates for the event. `sales.public
+   * .startDateTime` is when tickets went on sale — per-event, and in the past
+   * for anything currently listed, which is what makes it usable as `issued`.
+   */
+  sales?: {
+    public?: {
+      startDateTime?: string;
+      endDateTime?: string;
+    };
+    presales?: Array<{ startDateTime?: string }>;
   };
   classifications?: Array<{
     segment?: { name: string };
@@ -232,6 +245,11 @@ export class PhoenixEventsPlugin extends BasePlugin {
     // Determine risk level based on event type/venue
     const riskLevel = this.assessEventRisk(event, venue?.name);
 
+    const { issued, basis: issuedBasis } = resolveIssued({
+      published: [event.sales?.public?.startDateTime, event.sales?.presales?.[0]?.startDateTime],
+      eventStart: startDateTime,
+    });
+
     return this.createAlert({
       id: `tm-${event.id}`,
       externalId: event.id,
@@ -249,13 +267,18 @@ export class PhoenixEventsPlugin extends BasePlugin {
         zipCode: venue?.postalCode,
       },
       timestamps: {
-        issued: new Date().toISOString(),
+        // Ticketmaster publishes a real per-event onsale date; the fetch time
+        // that used to sit here made `issued` identical for every event in the
+        // response and turned the aggregator's recency tiebreak into a no-op.
+        issued,
         eventStart: startDateTime,
         eventEnd: endDateTime,
       },
       url: event.url,
       metadata: {
         source: 'ticketmaster',
+        issuedBasis,
+        onsaleDate: event.sales?.public?.startDateTime,
         venue: venue?.name,
         segment: classification?.segment?.name,
         genre: classification?.genre?.name,

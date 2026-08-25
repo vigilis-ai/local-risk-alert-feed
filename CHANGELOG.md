@@ -4,6 +4,78 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-08-25
+
+### Fixed
+- **`timestamps.issued` is a real property of the record, not the clock at fetch
+  time.** `issued` is the ordering key inside a severity band in
+  `AlertAggregator.scoreForTriage`, so once severity ties it decides which
+  alerts survive the caller's result limit. Seven mappings across seven plugins
+  made it a constant, which turned that tiebreak into a no-op and left the
+  surviving set down to whatever order the upstream happened to return. Because
+  the constant was always "now", those alerts also outranked every
+  honestly-dated one in the same band.
+
+  - **Arizona traffic** mapped `issued` to ADOT's `LastUpdated`. Measured on the
+    live feed 2026-08-25, across all 2,553 events: `LastUpdated` has 948 distinct
+    values but **1,460 of them (57%) share a single one**, which moves with the
+    wall clock between feed refreshes — it is ADOT's own refresh stamp, not a
+    revision time for the record. It now maps to `Reported` (989 distinct
+    values, largest tie group 60), with `LastUpdated` kept as a fallback and in
+    `metadata.lastUpdatedAt` for provenance. After the change, 0 of 619 live
+    downtown-Phoenix alerts carry the refresh stamp and the largest group
+    sharing one `issued` is 32, down from ~57% of the feed.
+
+    Caveat stated rather than glossed: in this feed `Reported` equals `StartDate`
+    on 100% of records, so it is the event's own date rather than an independent
+    publication instant, and it is in the future for scheduled work. That is the
+    same trade the events plugins make below, and it costs nothing downstream —
+    `scoreForTriage` clamps `issued` to `now` and `deduplicate()` only needs it
+    stable per record.
+
+  - **Six `new Date().toISOString()` stamps** are gone: `phoenix-events`,
+    `phoenix-convention-center`, `glendale-events`, `austin-events` (both the
+    convention and special-event paths) and `baseline-risk-plugin`. Where the
+    upstream publishes a real per-record instant it is used —
+    Ticketmaster's `sales.public.startDateTime` (onsale), Austin's permit
+    `report_date`, and the CKAN/Socrata `last_modified` behind
+    `getDatasetVersion()` for baseline summaries. Where none exists, `issued`
+    falls back to the event's own date rather than the fetch time.
+    `metadata.issuedBasis` (`published` | `event-start` | `fetch-time`) records
+    which applied.
+
+    Austin's `:updated_at` is deliberately **not** used: all 2,000 sampled rows
+    of `teth-r7k8` share one value, and all 80 of `p9ma-z6y9` share another —
+    the same bulk-republish trap as ADOT's `LastUpdated`.
+
+- **The Arizona traffic query no longer truncates in silence.** It asked for the
+  whole state (`where=1=1`) unpaged, and ArcGIS capped the answer at the service
+  `maxRecordCount` of 2,000. Live on 2026-08-25 the feed held **2,559** events,
+  so 559 were dropped before the radius filter ever ran, with nothing said — and
+  a truncated feed is indistinguishable from a quiet one, which reads as
+  "nothing happening near this site".
+
+  It now uses the shared `fetchArcGisFeatures` helper: `resultOffset` paging to
+  exhaustion, plus an `envelopeForRadius` filter around the query point so the
+  server does the geography. The same downtown-Phoenix query goes from 2,559
+  records fetched to 668, making the cap nearly unreachable in the first place.
+  When a cap does stop the walk, or the query fails outright, the reason is
+  appended to `warnings` instead of being swallowed into an empty result.
+
+### Added
+- **`resolveIssued` and `parseSocrataNumericDate`** (`utils/issued`), exported
+  from the package root. `resolveIssued` picks the best evidence a source
+  actually provides and reports the `basis` it used, so a plugin cannot quietly
+  fall back to the fetch time without saying so.
+
+### Known limitation
+- For a scheduled alert whose `issued` falls back to a *future* event date,
+  `scoreForTriage` clamps `issued` to `now`, so those alerts still tie with one
+  another. This is strictly better than before — the value is no longer a false
+  claim about the record — but ordering scheduled events by imminence needs the
+  aggregator to rank them on `eventStart`, which is deliberately out of scope
+  here rather than changed underneath callers.
+
 ## [2.2.0] - 2026-08-17
 
 ### Fixed

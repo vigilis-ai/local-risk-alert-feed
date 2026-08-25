@@ -1,5 +1,6 @@
 import type { PluginMetadata, PluginFetchOptions, PluginFetchResult, RiskLevel } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { fetchArcGisFeatures, envelopeForRadius } from '../../utils';
 
 /**
  * ADOT traffic event structure.
@@ -19,6 +20,9 @@ interface ADOTTrafficEvent {
   longitude: number;
   start_time?: string;
   end_time?: string;
+  /** `Reported` — per-record, and equal to `StartDate` throughout this feed. */
+  reported?: string;
+  /** `LastUpdated` — revision stamp. See {@link resolveAdotIssued}. */
   last_updated?: string;
   lanes_affected?: string;
   lanes_blocked?: string;
@@ -52,6 +56,62 @@ export interface ArizonaTrafficPluginConfig extends BasePluginConfig {
   closuresOnly?: boolean;
   /** Minimum delay in minutes to include. Default: 0 */
   minDelayMinutes?: number;
+  /** Records per ArcGIS page. Default: 1000 (service maxRecordCount is 2000). */
+  pageSize?: number;
+  /** Hard ceiling on records read across all pages. Default: 4000. */
+  maxRecords?: number;
+}
+
+/**
+ * Resolve the instant an ADOT event was *issued*.
+ *
+ * `LastUpdated` looks like the obvious choice and is not. For records with
+ * `Organization = "RADS"` — the city right-of-way permits that make up the bulk
+ * of Phoenix-area results — ADOT stamps `LastUpdated` with its own feed refresh
+ * time, not with anything about the record. Measured against the live feed on
+ * 2026-08-25, across all 2,553 events: `LastUpdated` has 948 distinct values,
+ * but **1,460 of them (57%) share a single one** — and that value moves with
+ * the wall clock between refreshes. Genuine ADOT highway records (US-60,
+ * 101-LOOP) do carry distinct values.
+ *
+ * That matters because `issued` is a ranking key in
+ * `AlertAggregator.scoreForTriage`: severity picks the band, `issued` orders
+ * *within* it. A field that is the same constant for most of the feed — and
+ * that constant is always ≈ now — makes the tiebreak a no-op and hands every
+ * within-band slot to whichever record happened to sort first. Which alerts
+ * survive the result limit then comes down to nothing. It also always sorts
+ * *newest*, so the stamped majority outranks every honestly-dated record.
+ *
+ * `Reported` is the better key by a wide margin: 989 distinct values over the
+ * same 2,553 records, largest tie group **60 (2.3%)** against `LastUpdated`'s
+ * 1,460.
+ *
+ * One caveat worth stating rather than glossing: in this feed `Reported` is
+ * equal to `StartDate` on 100% of records, so it is the event's own date rather
+ * than an independent publication instant, and for scheduled work it is in the
+ * future. That is the same trade the events plugins make — anchor `issued` on
+ * the best date the record itself carries, never on the clock at fetch time.
+ * A future value costs nothing downstream: `scoreForTriage` clamps `issued` to
+ * `now`, and `deduplicate()` just needs it stable per record.
+ *
+ * `LastUpdated` stays as a fallback and is kept in `metadata.lastUpdatedAt` for
+ * provenance.
+ */
+export function resolveAdotIssued(
+  event: Pick<ADOTTrafficEvent, 'reported' | 'last_updated'>,
+  now: number = Date.now()
+): string {
+  const reported = event.reported ? Date.parse(event.reported) : NaN;
+  if (Number.isFinite(reported)) {
+    return new Date(reported).toISOString();
+  }
+
+  const updated = event.last_updated ? Date.parse(event.last_updated) : NaN;
+  if (Number.isFinite(updated)) {
+    return new Date(updated).toISOString();
+  }
+
+  return new Date(now).toISOString();
 }
 
 /**
@@ -143,19 +203,20 @@ export class ArizonaTrafficPlugin extends BasePlugin {
       includeConstruction: true,
       closuresOnly: false,
       minDelayMinutes: 0,
+      pageSize: 1000,
+      maxRecords: 4000,
       ...config,
     };
   }
 
   async fetchAlerts(options: PluginFetchOptions): Promise<PluginFetchResult> {
-    const { location, radiusMeters } = options;
     const cacheKey = this.generateCacheKey(options);
     const warnings: string[] = [];
 
     try {
       const { data, fromCache } = await this.getCachedOrFetch(
         cacheKey,
-        () => this.fetchTrafficEvents(location, radiusMeters, warnings),
+        () => this.fetchTrafficEvents(options, warnings),
         this.config.cacheTtlMs
       );
 
@@ -174,14 +235,12 @@ export class ArizonaTrafficPlugin extends BasePlugin {
   /**
    * Fetch traffic events from ADOT consolidated endpoint.
    */
-  private async fetchTrafficEvents(
-    location: { latitude: number; longitude: number },
-    radiusMeters: number,
-    warnings: string[]
-  ) {
+  private async fetchTrafficEvents(options: PluginFetchOptions, warnings: string[]) {
+    const { location, radiusMeters } = options;
+
     try {
-      // ADOT now uses a single consolidated endpoint for all traffic events
-      const events = await this.fetchFromSource(this.buildTrafficEventsUrl(), 'traffic');
+      // ADOT uses a single consolidated endpoint for all traffic events.
+      const events = await this.fetchFromSource(options, warnings, 'traffic');
 
       const filtered = events.filter((event) => {
         // Filter by location
@@ -237,33 +296,75 @@ export class ArizonaTrafficPlugin extends BasePlugin {
   }
 
   /**
-   * Build URL for traffic events (incidents, construction, closures).
-   * Note: ADOT consolidated all traffic events into a single endpoint.
-   * Location filtering is done client-side after fetching all Arizona data.
+   * Fetch traffic events for one query location and normalize them.
+   *
+   * Two things used to go wrong here, both silent:
+   *
+   * 1. **The query was unpaged.** It asked for the whole state (`where=1=1`)
+   *    and ArcGIS capped the answer at the service `maxRecordCount` of 2,000.
+   *    Live on 2026-08-25 the feed held **2,559** events, so 559 were dropped
+   *    before the radius filter ever ran — and nothing said so. A truncated
+   *    feed and a quiet one are indistinguishable to the caller, which is
+   *    exactly the failure mode that reads as "nothing happening near this
+   *    site". {@link fetchArcGisFeatures} walks `resultOffset` to exhaustion
+   *    and reports whether a cap stopped it, so we can warn instead.
+   *
+   * 2. **The whole state was pulled to serve a 10km radius.** Filtering
+   *    server-side with an envelope around the query point cuts the same
+   *    downtown-Phoenix query from 2,559 records to 668, and makes the cap
+   *    almost impossible to hit in the first place.
    */
-  private buildTrafficEventsUrl(): string {
-    // ADOT Open Data Portal - Traffic Events (consolidated endpoint)
-    // Note: This is a public GeoJSON endpoint on the updated ArcGIS server
-    return 'https://services6.arcgis.com/clPWQMwZfdWn4MQZ/arcgis/rest/services/ADOT_Traffic_Events/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson';
-  }
+  private async fetchFromSource(
+    options: PluginFetchOptions,
+    warnings: string[],
+    type: string
+  ): Promise<ADOTTrafficEvent[]> {
+    const { location, radiusMeters } = options;
 
-  /**
-   * Fetch from a specific source and normalize the data.
-   */
-  private async fetchFromSource(url: string, type: string): Promise<ADOTTrafficEvent[]> {
+    // ADOT Open Data Portal - Traffic Events (consolidated endpoint).
+    const baseUrl =
+      'https://services6.arcgis.com/clPWQMwZfdWn4MQZ/arcgis/rest/services/ADOT_Traffic_Events/FeatureServer/0/query';
+
+    const budget = this.resolveFetchBudget(options, this.trafficConfig.maxRecords ?? 4000);
+
+    const params = new URLSearchParams({
+      where: '1=1',
+      outFields: '*',
+      f: 'geojson',
+      outSR: '4326',
+      // Paging is only stable under an explicit order.
+      orderByFields: 'Reported DESC',
+      geometry: envelopeForRadius(location.latitude, location.longitude, radiusMeters),
+      geometryType: 'esriGeometryEnvelope',
+      spatialRel: 'esriSpatialRelIntersects',
+      inSR: '4326',
+    });
+
     try {
-      const response = await this.fetchJson<ADOTGeoJSONResponse>(url);
+      const { features, truncated } = await fetchArcGisFeatures<ADOTGeoJSONResponse['features'][number]>({
+        baseUrl,
+        params,
+        pageSize: Math.min(this.trafficConfig.pageSize ?? 1000, budget.maxRecords),
+        maxRecords: budget.maxRecords,
+        fetchJson: (url) => this.fetchJson(url),
+      });
 
-      if (!response.features) {
-        return [];
+      if (truncated) {
+        warnings.push(
+          `ADOT reported more traffic events near this location than the ${budget.maxRecords}-record ` +
+            `limit allowed; only the ${budget.maxRecords} most recently reported were read. ` +
+            `Narrow the radius for complete results.`
+        );
       }
 
-      return response.features
+      return features
         .filter((feature) => feature.geometry)
         .map((feature) => this.normalizeFeature(feature, type));
     } catch (error) {
-      // If the ADOT endpoint fails, try a fallback approach
-      console.warn(`ADOT ${type} endpoint failed, returning empty:`, error);
+      // Surface the failure. Returning [] silently is the same "quiet feed" lie.
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.warn(`ADOT ${type} endpoint failed:`, error);
+      warnings.push(`ADOT ${type} query failed: ${message}`);
       return [];
     }
   }
@@ -318,8 +419,13 @@ export class ArizonaTrafficPlugin extends BasePlugin {
       to_location: props.TO_LOCATION as string | undefined,
       latitude,
       longitude,
+      // `Reported` stays the third-choice fallback for start_time: StartDate is
+      // populated on effectively every record, so this only fires when the feed
+      // gives us nothing better, and "when it was reported" is a defensible
+      // stand-in for "when it started". It is now also read on its own below.
       start_time: parseTimestamp(props.StartDate ?? props.START_TIME ?? props.Reported),
       end_time: parseTimestamp(props.PlannedEndDate ?? props.END_TIME ?? props.EndDate),
+      reported: parseTimestamp(props.Reported ?? props.REPORTED),
       last_updated: parseTimestamp(props.LastUpdated ?? props.LAST_UPDATED),
       lanes_affected: (props.LanesAffected ?? props.LANES_AFFECTED) as string | undefined,
       lanes_blocked: props.LANES_BLOCKED as string | undefined,
@@ -349,13 +455,17 @@ export class ArizonaTrafficPlugin extends BasePlugin {
         address: this.buildAddress(event),
       },
       timestamps: {
-        issued: event.last_updated ?? new Date().toISOString(),
+        issued: resolveAdotIssued(event),
         eventStart: event.start_time,
         eventEnd: event.end_time,
       },
       metadata: {
         eventType: event.event_type,
         eventSubtype: event.event_subtype,
+        reportedAt: event.reported,
+        // Kept for provenance only — see resolveAdotIssued for why this is not
+        // the issued time.
+        lastUpdatedAt: event.last_updated,
         roadName: event.road_name,
         direction: event.direction,
         lanesAffected: event.lanes_affected,

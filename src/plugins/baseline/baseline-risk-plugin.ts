@@ -6,6 +6,8 @@ import type {
   Alert,
 } from '../../types';
 import { BasePlugin, BasePluginConfig } from '../base-plugin';
+import { resolveIssued } from '../../utils';
+import type { IssuedBasis } from '../../utils';
 
 /**
  * Raw per-cell aggregate produced by a subclass's materialize step.
@@ -110,6 +112,8 @@ export function scoreCells(
 export interface BaselineSummaryMetadata {
   /** Discriminator — always `'baseline-summary'` for these alerts. */
   kind: 'baseline-summary';
+  /** How `timestamps.issued` was derived — see {@link resolveIssued}. */
+  issuedBasis: IssuedBasis;
   /** Dataset version this score was computed from (e.g. last_modified). */
   datasetVersion: string;
   /** Human label for the aggregation window (e.g. "all-time since 2015"). */
@@ -366,6 +370,13 @@ export abstract class BaselineRiskPlugin extends BasePlugin {
     const point = (home && this.cellCentroid(home)) || options.location;
     const tierWord = riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1);
 
+    const { issued, basis: issuedBasis } = resolveIssued({
+      published: [snap.version],
+      // No parseable version (e.g. 'unknown'): fall back to when this snapshot
+      // was actually materialized rather than to the current request's clock.
+      eventStart: snap.fetchedAtMs,
+    });
+
     return this.createAlert({
       id: `${this.metadata.id}-${point.latitude.toFixed(4)},${point.longitude.toFixed(4)}`,
       title: `Crime risk: ${tierWord} area (${percentile}th percentile)`,
@@ -375,9 +386,15 @@ export abstract class BaselineRiskPlugin extends BasePlugin {
       category: 'crime',
       temporalType: 'historical',
       location: { point },
-      timestamps: { issued: new Date().toISOString() },
+      // The summary describes a published dataset, so it was issued when that
+      // dataset was — `getDatasetVersion()` returns exactly that for the CKAN
+      // and Socrata sources (`last_modified`). The fetch time that used to sit
+      // here made every baseline alert look brand new, which in a `historical`
+      // band is both false and the strongest possible recency tiebreak.
+      timestamps: { issued },
       metadata: {
         kind: 'baseline-summary',
+        issuedBasis,
         datasetVersion: snap.version,
         window: this.windowLabel(),
         homeCell: home,

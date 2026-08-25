@@ -142,6 +142,8 @@ export type { CSVParseOptions } from './utils';
 // ArcGIS helpers (for custom plugins backed by an ArcGIS FeatureServer/MapServer)
 export { ArcGisQueryError, fetchArcGisFeatures, envelopeForRadius, toArcGisTimestamp } from './utils';
 export type { ArcGisFetchOptions, ArcGisFetchResult } from './utils';
+export { resolveIssued, parseSocrataNumericDate } from './utils';
+export type { IssuedBasis, ResolveIssuedOptions } from './utils';
 
 // Timezone helper — label a floating local timestamp (Socrata feeds) with the
 // correct UTC offset so it satisfies the contract's timezone-qualified format.
