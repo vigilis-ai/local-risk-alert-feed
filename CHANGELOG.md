@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-24
+
+### Changed
+- **Built on Zod 4.** The library now depends on `zod ^4.6.7` instead of
+  `^3.25.76`, which carried a published advisory. Every exported schema
+  (`AlertSchema`, `AlertSchemaLenient`, `AlertQuerySchema`, the contract
+  schemas) is now a Zod 4 schema, so code that composes them with its own
+  `zod` import must be on Zod 4 too — that is why this is a major version.
+  Parsing results are unchanged: all 207 tests pass as before.
+- **`ValidationError` issue paths** are joined with `String()` on each
+  segment, since Zod 4 paths may contain symbols.
+
+### Fixed
+- **The lenient alert schema kept its optional fields optional under Zod 4.**
+  Zod 4 reads a transform that can yield `undefined` as a required key, which
+  rejected every alert missing `url`, `metadata` or any other lenient field;
+  each lenient field now ends in `.optional()`.
+
 ## [2.3.0] - 2026-08-25
 
 ### Fixed

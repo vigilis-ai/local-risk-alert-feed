@@ -125,7 +125,7 @@ export const AlertSchema = z.object({
   timestamps: AlertTimestampsSchema,
   source: AlertSourceSchema,
   url: z.string().url().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 /**
@@ -142,11 +142,16 @@ export type AlertSchemaType = z.infer<typeof AlertSchema>;
  * alert to show.
  */
 function lenientOptional<T extends z.ZodTypeAny>(inner: T) {
-  return z.unknown().transform((value) => {
-    if (value === undefined || value === null) return undefined;
-    const parsed = inner.safeParse(value);
-    return parsed.success ? (parsed.data as z.infer<T>) : undefined;
-  });
+  // `.optional()` keeps the key optional: zod 4 otherwise reads a transform
+  // that can return undefined as a required key and rejects the alert.
+  return z
+    .unknown()
+    .transform((value) => {
+      if (value === undefined || value === null) return undefined;
+      const parsed = inner.safeParse(value);
+      return parsed.success ? (parsed.data as z.infer<T>) : undefined;
+    })
+    .optional();
 }
 
 /**
@@ -186,5 +191,5 @@ export const AlertSchemaLenient = AlertSchema.extend({
     externalId: lenientOptional(z.string()),
   }),
   url: lenientOptional(z.string().url()),
-  metadata: lenientOptional(z.record(z.unknown())),
+  metadata: lenientOptional(z.record(z.string(), z.unknown())),
 });

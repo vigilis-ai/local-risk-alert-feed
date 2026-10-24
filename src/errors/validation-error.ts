@@ -28,7 +28,7 @@ export class ValidationError extends Error {
    */
   static fromZodError(error: ZodError): ValidationError {
     const issues = error.issues.map((issue: ZodIssue) => ({
-      path: issue.path.join('.'),
+      path: issue.path.map(String).join('.'),
       message: issue.message,
       code: issue.code,
     }));
