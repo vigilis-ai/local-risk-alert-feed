@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-10-29
+
+### Fixed
+- **XML feeds can no longer get around the entity-expansion limit.** `fast-xml-parser` moves to `^5.11.2`; before 5.10.1, repeated DOCTYPE declarations reset the limit, so a hostile feed could make parsing expensive.
+
 ## [3.0.0] - 2026-10-24
 
 ### Changed
